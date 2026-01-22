@@ -1,11 +1,8 @@
-# Claude
-  
-TODO: Supply a short overview of the functionality the extension brings to Aha! Develop
-This [Aha! Develop](https://www.aha.io/develop/overview) extension enables...
+# Assign to Claude
 
-It provides these contributions:
+This is an extension for [Aha! Develop](https://www.aha.io/develop) which provides a way to send the details of Features and Requirements Github as an issue and mention @claude.
 
-TODO: Add a contribution list here. These should briefly describe each of the features provided by this extension.
+You need to have @claude configured within your Github repository per the instructions here; https://code.claude.com/docs/en/github-actions
 
 ## Demo
 
@@ -31,6 +28,7 @@ npm install -g aha-cli
 Clone the repo:
 
 TODO: Add the repository URL here
+
 ```sh
 git clone ...
 ```
