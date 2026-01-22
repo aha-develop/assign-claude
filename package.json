@@ -1,0 +1,70 @@
+{
+  "name": "aha-develop.assign-claude",
+  "description": "Claude",
+  "version": "1.0.0",
+  "author": "Aha! (support@aha.io)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aha-develop/assign-claude"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^16.14.68",
+    "aha-cli": "^1.17.0"
+  },
+  "ahaExtension": {
+    "contributes": {
+      "views": {
+        "assignClaudeButton": {
+          "title": "Claude Code",
+          "host": "attribute",
+          "entryPoint": "src/views/AssignClaudeButton.tsx",
+          "recordTypes": [
+            "Feature",
+            "Requirement"
+          ]
+        }
+      },
+      "settings": {
+        "repository": {
+          "title": "GitHub Repository",
+          "description": "Format: owner/repo (e.g., myorg/myrepo)",
+          "type": "string",
+          "required": true,
+          "scope": [
+            "account",
+            "user"
+          ]
+        },
+        "baseBranch": {
+          "title": "Base Branch",
+          "description": "The branch to create PRs against",
+          "type": "string",
+          "default": "main",
+          "scope": [
+            "account",
+            "user"
+          ]
+        },
+        "claudeHandle": {
+          "title": "Claude Handle",
+          "description": "The handle to mention Claude (e.g., claude)",
+          "type": "string",
+          "default": "claude",
+          "scope": [
+            "account"
+          ]
+        },
+        "customInstructions": {
+          "title": "Custom Instructions for Claude",
+          "description": "Additional instructions to include as part of the @claude mention",
+          "type": "string",
+          "scope": [
+            "account",
+            "user"
+          ]
+        }
+      }
+    }
+  }
+}
