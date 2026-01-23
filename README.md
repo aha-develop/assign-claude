@@ -4,6 +4,11 @@ This is an extension for [Aha! Develop](https://www.aha.io/develop) which provid
 
 You need to have @claude configured within your Github repository per the instructions here; https://code.claude.com/docs/en/github-actions
 
+<img width="754" height="67" alt="image" src="https://github.com/user-attachments/assets/925b176f-af6e-4aa4-b1ca-6600be115cd2" />
+
+<img width="754" height="45" alt="image" src="https://github.com/user-attachments/assets/71cd0f22-4fd8-4fe0-af75-613f8650b2d9" />
+
+
 ## Demo
 
 TODO: Add a short .gif screen recording showing some of the highlights of your extension. This can be recorded using a tool like [LICECap](https://www.cockos.com/licecap/).
