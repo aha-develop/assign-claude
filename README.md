@@ -11,9 +11,11 @@ You need to have @claude configured within your Github repository per the instru
 
 ## Demo
 
-TODO: Add a short .gif screen recording showing some of the highlights of your extension. This can be recorded using a tool like [LICECap](https://www.cockos.com/licecap/).
 
-![demo](demo.gif)
+
+[demo.mp4](https://github.com/user-attachments/assets/01ed113a-e199-4d5e-8dbc-e2c9de317aba)
+
+
 
 ## Installing the extension
 
