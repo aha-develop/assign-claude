@@ -87,7 +87,7 @@ ${
     .join("\n")}
 
 ${feature.tasks && feature.tasks.length > 0 ? "### Todos\n" : ""}${feature.tasks
-    ?.map((task) => `- **${task.name}**\n\n${task.body || ""}`)
+    ?.map((task) => `- ${task.name}${task.body ? `\n${task.body}` : ""}`)
     .join("\n\n")}
 
 **Aha! Reference:** [${record.referenceNum}](${feature.path})
