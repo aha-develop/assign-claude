@@ -8,21 +8,15 @@ You need to have @claude configured within your Github repository per the instru
 
 <img width="754" height="45" alt="image" src="https://github.com/user-attachments/assets/71cd0f22-4fd8-4fe0-af75-613f8650b2d9" />
 
-
 ## Demo
 
-
-
 [demo.mp4](https://github.com/user-attachments/assets/01ed113a-e199-4d5e-8dbc-e2c9de317aba)
-
-
 
 ## Installing the extension
 
 **Note: In order to install an extension into your Aha! Develop account, you must be an account administrator.**
 
-TODO: Fill in a link to your built extension package
-Install the Claude extension by clicking [here](https://secure.aha.io/settings/account/extensions/install?url=).
+Install the extension by clicking [here](https://secure.aha.io/settings/account/extensions/install?url=https%3A%2F%2Fsecure.aha.io%2Fextensions%2Faha-develop.assign-claude.gz).
 
 ## Working on the extension
 
