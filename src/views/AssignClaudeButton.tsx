@@ -166,7 +166,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
                 window.open(issueUrl, "_blank", "noopener noreferrer");
               }}
             >
-              View Issue
+              View issue
               <i className="fa-regular fa-arrow-up-right" />
             </aha-button>
           }
