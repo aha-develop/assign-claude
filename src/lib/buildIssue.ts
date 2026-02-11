@@ -38,6 +38,12 @@ type RequirementType = Pick<
   referenceNum: string;
 };
 
+type RecordAttachment = {
+  fileName: string;
+  contentType: string;
+  downloadUrl: string;
+};
+
 export type RecordType = FeatureType | RequirementType;
 
 /**
@@ -52,9 +58,14 @@ export interface ClaudeIssueData {
 /**
  * Fetches full record details including name, path, and description.
  */
-async function describeFeature(
-  record: FeatureType,
-): Promise<[string, FetchedFeature]> {
+async function describeFeature(record: {
+  typename: "Feature";
+  id: string;
+}): Promise<{
+  body: string;
+  attachments: RecordAttachment[];
+  model: FetchedFeature;
+}> {
   const feature = await aha.models.Feature.select(
     "id",
     "name",
@@ -62,11 +73,15 @@ async function describeFeature(
     "referenceNum",
   )
     .merge({
-      description: ["markdownBody"],
+      description: aha.models.Note.select("markdownBody").merge({
+        attachments: aha.models.Attachment.select("fileName", "contentType", {
+          downloadUrl: { withToken: true },
+        }),
+      }),
       tasks: aha.models.Task.select("name", "body"),
       requirements: aha.models.Requirement.select("name", "referenceNum"),
     })
-    .find(record.referenceNum);
+    .find(record.id);
 
   if (!feature) {
     throw new Error("Failed to fetch feature details.");
@@ -90,14 +105,23 @@ ${feature.tasks && feature.tasks.length > 0 ? "### Todos\n" : ""}${feature.tasks
     ?.map((task) => `- ${task.name}${task.body ? `\n${task.body}` : ""}`)
     .join("\n\n")}
 
-**Aha! Reference:** [${record.referenceNum}](${feature.path})
+**Aha! Reference:** [${feature.referenceNum}](${feature.path})
 `;
-  return [body, feature];
+  return {
+    body,
+    attachments: feature.description?.attachments ?? [],
+    model: feature,
+  };
 }
 
-async function describeRequirement(
-  record: RequirementType,
-): Promise<[string, FetchedRequirement]> {
+async function describeRequirement(record: {
+  typename: "Requirement";
+  id: string;
+}): Promise<{
+  body: string;
+  attachments: RecordAttachment[];
+  model: FetchedRequirement;
+}> {
   const requirement: FetchedRequirement = await aha.models.Requirement.select(
     "id",
     "name",
@@ -105,13 +129,21 @@ async function describeRequirement(
     "path",
   )
     .merge({
-      description: ["markdownBody"],
+      description: aha.models.Note.select("markdownBody").merge({
+        attachments: aha.models.Attachment.select("fileName", "contentType", {
+          downloadUrl: { withToken: true },
+        }),
+      }),
       tasks: aha.models.Task.select("name", "body"),
       feature: aha.models.Feature.select("name", "referenceNum").merge({
-        description: ["markdownBody"],
+        description: aha.models.Note.select("markdownBody").merge({
+          attachments: aha.models.Attachment.select("fileName", "contentType", {
+            downloadUrl: { withToken: true },
+          }),
+        }),
       }),
     })
-    .find(record.referenceNum);
+    .find(record.id);
 
   if (!requirement) {
     throw new Error("Failed to fetch requirement details.");
@@ -131,10 +163,17 @@ ${
     ?.map((task) => `- **${task.name}**\n\n${task.body || ""}`)
     .join("\n\n")}
 
-**Aha! Reference:** [${record.referenceNum}](${requirement.path})
+**Aha! Reference:** [${requirement.referenceNum}](${requirement.path})
 `;
 
-  return [body, requirement];
+  return {
+    body,
+    attachments: [
+      ...(requirement.description?.attachments ?? []),
+      ...(requirement.feature.description?.attachments ?? []),
+    ],
+    model: requirement,
+  };
 }
 
 /**
@@ -145,8 +184,9 @@ ${
  * @param customInstructions - Additional instructions for Claude (optional)
  */
 export async function buildIssue(
-  record: RecordType,
-  baseBranch: string,
+  record:
+    | { typename: "Feature"; id: string }
+    | { typename: "Requirement"; id: string },
   customInstructions?: string,
   agentHandle?: string,
 ): Promise<{
@@ -155,10 +195,17 @@ export async function buildIssue(
   comment: string;
   model: FetchedFeature | FetchedRequirement;
 }> {
-  let [body, model] =
+  let { body, attachments, model } =
     record.typename === "Feature"
-      ? await describeFeature(record as FeatureType)
-      : await describeRequirement(record as RequirementType);
+      ? await describeFeature(record)
+      : await describeRequirement(record);
+
+  if (attachments.length > 0) {
+    body += `\n\n### Attachments\n`;
+    attachments.forEach((att) => {
+      body += `- [${att.fileName}](${att.downloadUrl})\n`;
+    });
+  }
 
   const comment = `
 @${agentHandle ? agentHandle.replace(/^@/, "") : "claude"} please create a pull request to implement this feature.
@@ -166,7 +213,6 @@ export async function buildIssue(
 **IMPORTANT - Branch and PR Naming Requirement:**
 - You MUST include \`${model.referenceNum}\` in the branch name
 - You MUST include \`${model.referenceNum}\` in the PR title
-- Create the PR against the \`${baseBranch}\` branch
 `;
 
   if (customInstructions) {
