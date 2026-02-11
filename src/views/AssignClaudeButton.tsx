@@ -3,9 +3,7 @@ import { buildIssue, ClaudeIssueData, RecordType } from "../lib/buildIssue";
 import { createIssue, getGitHubToken } from "../lib/github";
 import { Icon } from "./Icon";
 import { SendToAI } from "./SendToAI";
-
-const EXTENSION_ID = "aha-develop.assign-claude";
-const FIELD_NAME = "claudeIssue";
+import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
 
 interface AssignClaudeButtonProps {
   record: RecordType;
@@ -55,7 +53,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
         );
       }
       const [owner, repo] = repository.split("/");
-      const baseBranch = settings.baseBranch?.trim() || "main";
+      const baseBranch = settings.baseBranch?.trim();
 
       const customInstructions = settings.customInstructions;
 
