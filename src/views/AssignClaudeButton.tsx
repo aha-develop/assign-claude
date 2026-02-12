@@ -121,9 +121,17 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
           footer={`Share this ${record.typename.toLowerCase()} with Claude to begin implementation.`}
           alert={
             status === "error" ? (
-              <aha-alert type="danger" size="mini">
-                {message}
-              </aha-alert>
+              <aha-alert
+                  type="danger"
+                  size="mini"
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    overflowWrap: "break-word",
+                  }}
+                >
+                  {message}
+                </aha-alert>
             ) : null
           }
         />
