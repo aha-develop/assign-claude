@@ -33,6 +33,7 @@
           "required": true,
           "scope": [
             "account",
+            "team",
             "user"
           ]
         },
@@ -43,6 +44,7 @@
           "default": "main",
           "scope": [
             "account",
+            "team",
             "user"
           ]
         },
@@ -52,7 +54,8 @@
           "type": "string",
           "default": "claude",
           "scope": [
-            "account"
+            "account",
+            "team"
           ]
         },
         "customInstructions": {
@@ -61,6 +64,7 @@
           "type": "string",
           "scope": [
             "account",
+            "team",
             "user"
           ]
         }
