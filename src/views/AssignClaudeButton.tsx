@@ -133,16 +133,16 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
           alert={
             status === "error" ? (
               <aha-alert
-                  type="danger"
-                  size="mini"
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    overflowWrap: "break-word",
-                  }}
-                >
-                  {message}
-                </aha-alert>
+                type="danger"
+                size="mini"
+                style={{
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
+                }}
+              >
+                {message}
+              </aha-alert>
             ) : null
           }
         />
@@ -200,6 +200,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
   );
 };
 
+// Consider moving this hook to https://github.com/aha-develop/aha-develop-react
 const useTeamSettings = (context: Aha.Context) => {
   const [settings, setSettings] = useState<Aha.Settings>();
   const [loading, setLoading] = useState(true);
