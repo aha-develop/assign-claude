@@ -1,22 +1,13 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { buildIssue, ClaudeIssueData, RecordType } from "../lib/buildIssue";
+import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
 import { createIssue, getGitHubToken } from "../lib/github";
 import { Icon } from "./Icon";
 import { SendToAI } from "./SendToAI";
-import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
-
-type Settings = {
-  repository?: string;
-  baseBranch?: string;
-  customInstructions?: string;
-};
-
-// Todo exposed by aha.runtime in the future
-type GetSettings = (args: { teamId: string }) => Promise<Aha.Settings>;
 
 type AssignClaudeButtonProps = {
   record: RecordType;
-  settings?: Settings;
+  settings?: Aha.Settings;
   existingIssue?: ClaudeIssueData;
 };
 
@@ -52,16 +43,28 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
       setMessage("Loading record details...");
 
       try {
-        const repository = settings.repository?.trim();
-        if (!repository || !repository.includes("/")) {
+        const repository = settings.repository;
+        if (
+          !repository ||
+          typeof repository !== "string" ||
+          !repository.includes("/")
+        ) {
           throw new Error(
             "Please configure the repository setting (e.g., owner/repo)",
           );
         }
-        const [owner, repo] = repository.split("/");
-        const baseBranch = settings.baseBranch?.trim();
+        const [owner, repo] = repository.trim().split("/");
 
-        const customInstructions = settings.customInstructions;
+        const baseBranch = settings.baseBranch;
+        if (!baseBranch || typeof baseBranch !== "string") {
+          throw new Error("Please configure the base branch setting");
+        }
+
+        const customInstructions =
+          "customInstructions" in settings &&
+          typeof settings.customInstructions === "string"
+            ? settings.customInstructions
+            : undefined;
 
         const { title, body, comment } = await buildIssue(
           record,
@@ -189,38 +192,41 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
   );
 };
 
-const useTeamSettings = (getSettings: GetSettings) => {
+const useTeamSettings = (context: Aha.Context) => {
   const [settings, setSettings] = useState<Aha.Settings>();
   const [loading, setLoading] = useState(true);
+  const teamId =
+    "currentProjectId" in window &&
+    typeof window.currentProjectId === "string" &&
+    window.currentProjectId;
 
   useEffect(() => {
-    getSettings({ teamId: window.currentProjectId })
-      .then((s) => {
-        console.log(`got some settings: ${s}`);
-        setSettings(s);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [window.currentProjectId]);
-
-  console.log(
-    `loading for team ${window.currentProjectId}: ${loading}, settings: ${JSON.stringify(settings, null, 2)}`,
-  );
+    if (teamId && "getSettings" in context) {
+      context
+        .getSettings({ teamId })
+        .then(setSettings)
+        .finally(() => {
+          setLoading(false);
+        });
+    } else {
+      setSettings(context.settings);
+      setLoading(false);
+    }
+  }, [teamId]);
 
   return [settings, { loading }] as const;
 };
 
 const AssignToClaude = ({
-  getSettings,
+  context,
   record,
   existingIssue,
 }: {
-  getSettings: GetSettings;
+  context: Aha.Context;
   record: RecordType;
   existingIssue?: ClaudeIssueData;
 }) => {
-  const [settings, { loading }] = useTeamSettings(getSettings);
+  const [settings, { loading }] = useTeamSettings(context);
   if (loading || !settings) {
     return <aha-spinner size="20px" />;
   }
@@ -233,13 +239,13 @@ const AssignToClaude = ({
   );
 };
 
-aha.on("assignClaudeButton", ({ record, fields }, { getSettings }) => {
+aha.on("assignClaudeButton", ({ record, fields }, context) => {
   const typedRecord = record as unknown as RecordType;
   const existingIssue = fields?.[FIELD_NAME] as ClaudeIssueData | undefined;
 
   return (
     <AssignToClaude
-      getSettings={getSettings}
+      context={context}
       record={typedRecord}
       existingIssue={existingIssue}
     />
