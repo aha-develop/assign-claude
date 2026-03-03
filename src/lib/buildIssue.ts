@@ -183,13 +183,17 @@ ${
  * @param baseBranch - The base branch for PRs
  * @param customInstructions - Additional instructions for Claude (optional)
  */
-export async function buildIssue(
+export async function buildIssue({
+  record,
+  customInstructions,
+  claudeHandle,
+}: {
   record:
     | { typename: "Feature"; id: string }
-    | { typename: "Requirement"; id: string },
-  customInstructions?: string,
-  agentHandle?: string,
-): Promise<{
+    | { typename: "Requirement"; id: string };
+  customInstructions?: string;
+  claudeHandle?: string;
+}): Promise<{
   title: string;
   body: string;
   comment: string;
@@ -208,7 +212,7 @@ export async function buildIssue(
   }
 
   const comment = `
-@${agentHandle ? agentHandle.replace(/^@/, "") : "claude"} please create a pull request to implement this feature.
+@${claudeHandle ? claudeHandle.replace(/^@/, "") : "claude"} please create a pull request to implement this feature.
 
 **IMPORTANT - Branch and PR Naming Requirement:**
 - You MUST include \`${model.referenceNum}\` in the branch name

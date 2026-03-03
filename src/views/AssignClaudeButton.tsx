@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { buildIssue, ClaudeIssueData, RecordType } from "../lib/buildIssue";
+import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
 import { createIssue, getGitHubToken } from "../lib/github";
 import { Icon } from "./Icon";
 import { SendToAI } from "./SendToAI";
-import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
 
 interface AssignClaudeButtonProps {
   record: RecordType;
@@ -11,6 +11,7 @@ interface AssignClaudeButtonProps {
     repository?: string;
     baseBranch?: string;
     customInstructions?: string;
+    claudeHandle?: string;
   };
   existingIssue?: ClaudeIssueData;
 }
@@ -53,15 +54,14 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
         );
       }
       const [owner, repo] = repository.split("/");
-      const baseBranch = settings.baseBranch?.trim();
 
-      const customInstructions = settings.customInstructions;
+      const { customInstructions, claudeHandle } = settings;
 
-      const { title, body, comment } = await buildIssue(
+      const { title, body, comment } = await buildIssue({
         record,
-        baseBranch,
         customInstructions,
-      );
+        claudeHandle,
+      });
 
       setMessage("Authenticating with GitHub...");
       const token = await getGitHubToken();
@@ -122,16 +122,16 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
           alert={
             status === "error" ? (
               <aha-alert
-                  type="danger"
-                  size="mini"
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    overflowWrap: "break-word",
-                  }}
-                >
-                  {message}
-                </aha-alert>
+                type="danger"
+                size="mini"
+                style={{
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
+                }}
+              >
+                {message}
+              </aha-alert>
             ) : null
           }
         />
