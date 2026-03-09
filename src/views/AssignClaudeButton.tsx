@@ -7,7 +7,12 @@ import { SendToAI } from "./SendToAI";
 
 type AssignClaudeButtonProps = {
   record: RecordType;
-  settings?: Aha.Settings;
+  settings: {
+    repository?: string;
+    baseBranch?: string;
+    customInstructions?: string;
+    claudeHandle?: string;
+  };
   existingIssue?: ClaudeIssueData;
 };
 
@@ -66,11 +71,11 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
             ? settings.customInstructions
             : undefined;
 
-        const { title, body, comment } = await buildIssue(
+        const { title, body, comment } = await buildIssue({
           record,
-          baseBranch,
           customInstructions,
-        );
+          claudeHandle: settings.claudeHandle,
+        });
 
         setMessage("Authenticating with GitHub...");
         const token = await getGitHubToken();
