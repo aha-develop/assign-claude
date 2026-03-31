@@ -153,7 +153,7 @@ async function describeRequirement(record: {
 
 ${requirement.description?.markdownBody}
 
-## Feature ${requirement.feature.referenceNum}
+## Parent Feature (for additional context only — not part of the core requirement): ${requirement.feature.referenceNum}
 
 ${requirement.feature.description?.markdownBody}
 

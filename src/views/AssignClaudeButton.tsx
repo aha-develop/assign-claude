@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { buildIssue, ClaudeIssueData, RecordType } from "../lib/buildIssue";
 import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
 import { createIssue, getGitHubToken } from "../lib/github";
 import { Icon } from "./Icon";
 import { SendToAI } from "./SendToAI";
 
-interface AssignClaudeButtonProps {
+type AssignClaudeButtonProps = {
   record: RecordType;
   settings: {
     repository?: string;
@@ -14,7 +14,7 @@ interface AssignClaudeButtonProps {
     claudeHandle?: string;
   };
   existingIssue?: ClaudeIssueData;
-}
+};
 
 type Status =
   | "not-configured"
@@ -41,56 +41,72 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
     existingIssue?.issueUrl || "",
   );
 
-  const handleClick = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    setStatus("loading");
-    setMessage("Loading record details...");
+  const handleClick = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      setStatus("loading");
+      setMessage("Loading record details...");
 
-    try {
-      const repository = settings.repository?.trim();
-      if (!repository || !repository.includes("/")) {
-        throw new Error(
-          "Please configure the repository setting (e.g., owner/repo)",
-        );
+      try {
+        const repository = settings.repository;
+        if (
+          !repository ||
+          typeof repository !== "string" ||
+          !repository.includes("/")
+        ) {
+          throw new Error(
+            "Please configure the repository setting (e.g., owner/repo)",
+          );
+        }
+        const [owner, repo] = repository.trim().split("/");
+
+        const baseBranch = settings.baseBranch;
+        if (!baseBranch || typeof baseBranch !== "string") {
+          throw new Error("Please configure the base branch setting");
+        }
+
+        const customInstructions =
+          "customInstructions" in settings &&
+          typeof settings.customInstructions === "string"
+            ? settings.customInstructions
+            : undefined;
+
+        const { title, body, comment } = await buildIssue({
+          record,
+          customInstructions,
+          claudeHandle: settings.claudeHandle,
+        });
+
+        setMessage("Authenticating with GitHub...");
+        const token = await getGitHubToken();
+
+        setMessage("Creating GitHub Issue...");
+        const issue = await createIssue(token, {
+          owner,
+          repo,
+          title,
+          body,
+          comment,
+        });
+
+        await record.setExtensionField(EXTENSION_ID, FIELD_NAME, {
+          issueNumber: issue.number,
+          issueUrl: issue.html_url,
+          assignedAt: new Date().toISOString(),
+        } as ClaudeIssueData);
+
+        setStatus("success");
+        setMessage("GitHub Issue created and assigned to Claude.");
+        setIssueUrl(issue.html_url);
+      } catch (error) {
+        setStatus("error");
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        setMessage(`Error: ${errorMessage}`);
       }
-      const [owner, repo] = repository.split("/");
-
-      const { customInstructions, claudeHandle } = settings;
-
-      const { title, body, comment } = await buildIssue({
-        record,
-        customInstructions,
-        claudeHandle,
-      });
-
-      setMessage("Authenticating with GitHub...");
-      const token = await getGitHubToken();
-
-      setMessage("Creating GitHub Issue...");
-      const issue = await createIssue(token, {
-        owner,
-        repo,
-        title,
-        body,
-        comment,
-      });
-
-      await record.setExtensionField(EXTENSION_ID, FIELD_NAME, {
-        issueNumber: issue.number,
-        issueUrl: issue.html_url,
-        assignedAt: new Date().toISOString(),
-      } as ClaudeIssueData);
-
-      setStatus("success");
-      setMessage("GitHub Issue created and assigned to Claude.");
-      setIssueUrl(issue.html_url);
-    } catch (error) {
-      setStatus("error");
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      setMessage(`Error: ${errorMessage}`);
-    }
-  };
+    },
+    [record, settings],
+  );
 
   return (
     <>
@@ -189,15 +205,62 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
   );
 };
 
-aha.on("assignClaudeButton", ({ record, fields }, { settings }) => {
-  const typedRecord = record as unknown as RecordType;
+// Consider moving this hook to https://github.com/aha-develop/aha-develop-react
+const useTeamSettings = (context: Aha.Context) => {
+  const [settings, setSettings] = useState<Aha.Settings>();
+  const [loading, setLoading] = useState(true);
+  const teamId =
+    "currentProjectId" in window &&
+    typeof window.currentProjectId === "string" &&
+    window.currentProjectId;
 
+  useEffect(() => {
+    if (teamId && "getSettings" in context) {
+      context
+        .getSettings({ teamId })
+        .then(setSettings)
+        .finally(() => {
+          setLoading(false);
+        });
+    } else {
+      setSettings(context.settings);
+      setLoading(false);
+    }
+  }, [teamId]);
+
+  return [settings, { loading }] as const;
+};
+
+const AssignToClaude = ({
+  context,
+  record,
+  existingIssue,
+}: {
+  context: Aha.Context;
+  record: RecordType;
+  existingIssue?: ClaudeIssueData;
+}) => {
+  const [settings, { loading }] = useTeamSettings(context);
+  if (loading || !settings) {
+    return <aha-spinner size="20px" />;
+  }
+  return (
+    <AssignClaudeButton
+      record={record}
+      settings={settings}
+      existingIssue={existingIssue}
+    />
+  );
+};
+
+aha.on("assignClaudeButton", ({ record, fields }, context) => {
+  const typedRecord = record as unknown as RecordType;
   const existingIssue = fields?.[FIELD_NAME] as ClaudeIssueData | undefined;
 
   return (
-    <AssignClaudeButton
+    <AssignToClaude
+      context={context}
       record={typedRecord}
-      settings={settings as AssignClaudeButtonProps["settings"]}
       existingIssue={existingIssue}
     />
   );

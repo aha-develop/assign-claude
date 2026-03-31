@@ -1,7 +1,7 @@
 {
   "name": "aha-develop.assign-claude",
   "description": "Claude",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "author": "Aha! (support@aha.io)",
   "repository": {
     "type": "git",
@@ -33,6 +33,7 @@
           "required": true,
           "scope": [
             "account",
+            "team",
             "user"
           ]
         },
@@ -43,6 +44,7 @@
           "default": "main",
           "scope": [
             "account",
+            "team",
             "user"
           ]
         },
@@ -52,7 +54,8 @@
           "type": "string",
           "default": "claude",
           "scope": [
-            "account"
+            "account",
+            "team"
           ]
         },
         "customInstructions": {
@@ -61,6 +64,7 @@
           "type": "string",
           "scope": [
             "account",
+            "team",
             "user"
           ]
         }
