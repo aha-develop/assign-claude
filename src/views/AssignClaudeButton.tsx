@@ -209,10 +209,17 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
 const useTeamSettings = (context: Aha.Context) => {
   const [settings, setSettings] = useState<Aha.Settings>();
   const [loading, setLoading] = useState(true);
+  // @see https://github.com/aha-app/aha-app/blob/7ac617e3d5aca077ee4df837ab1f6dd7cbc1de11/global_window.d.ts#L201-L216
   const teamId =
-    "currentProjectId" in window &&
-    typeof window.currentProjectId === "string" &&
-    window.currentProjectId;
+    "currentProject" in window &&
+    typeof window.currentProject === "object" &&
+    window.currentProject &&
+    "id" in window.currentProject &&
+    typeof window.currentProject.id === "string" &&
+    "isTeam" in window.currentProject &&
+    window.currentProject.isTeam
+      ? window.currentProject.id
+      : undefined;
 
   useEffect(() => {
     if (teamId && "getSettings" in context) {
