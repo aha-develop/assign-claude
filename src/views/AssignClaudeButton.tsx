@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { SendToAI } from "@aha-app/aha-develop-react";
+import React, { useCallback, useState } from "react";
 import { buildIssue, ClaudeIssueData, RecordType } from "../lib/buildIssue";
 import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
 import { createIssue, getGitHubToken } from "../lib/github";
+import { useTeamSettings } from "../lib/useTeamSettings";
 import { Icon } from "./Icon";
-import { SendToAI } from "./SendToAI";
 
 type AssignClaudeButtonProps = {
   record: RecordType;
@@ -205,32 +206,6 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
   );
 };
 
-// Consider moving this hook to https://github.com/aha-develop/aha-develop-react
-const useTeamSettings = (context: Aha.Context) => {
-  const [settings, setSettings] = useState<Aha.Settings>();
-  const [loading, setLoading] = useState(true);
-  const teamId =
-    "currentProjectId" in window &&
-    typeof window.currentProjectId === "string" &&
-    window.currentProjectId;
-
-  useEffect(() => {
-    if (teamId && "getSettings" in context) {
-      context
-        .getSettings({ teamId })
-        .then(setSettings)
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
-      setSettings(context.settings);
-      setLoading(false);
-    }
-  }, [teamId]);
-
-  return [settings, { loading }] as const;
-};
-
 const AssignToClaude = ({
   context,
   record,
@@ -240,7 +215,7 @@ const AssignToClaude = ({
   record: RecordType;
   existingIssue?: ClaudeIssueData;
 }) => {
-  const [settings, { loading }] = useTeamSettings(context);
+  const [settings, { loading }] = useTeamSettings(context, record);
   if (loading || !settings) {
     return <aha-spinner size="20px" />;
   }
