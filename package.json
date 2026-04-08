@@ -70,5 +70,8 @@
         }
       }
     }
+  },
+  "dependencies": {
+    "@aha-app/aha-develop-react": "^1.5.1"
   }
 }
