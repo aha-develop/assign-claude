@@ -219,7 +219,6 @@ const AssignToClaude = ({
   if (loading || !settings) {
     return <aha-spinner size="20px" />;
   }
-  console.log({ settings, loading });
   return (
     <AssignClaudeButton
       record={record}
