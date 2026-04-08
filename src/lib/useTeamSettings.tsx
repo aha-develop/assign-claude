@@ -10,13 +10,14 @@ export const useTeamSettings = (
   record: { id: string; typename: string },
 ) => {
   const [settings, setSettings] = useState<Aha.Settings>();
-  const [loading, setLoading] = useState(true);
+  const [loadingModel, setLoadingModel] = useState(true);
+  const [loadingSettings, setLoadingSettings] = useState(true);
   const [teamId, setTeamId] = useState<string>();
 
   useEffect(() => {
     // Load the model from the Aha.RecordStub in order to get the teamId
     if (record.typename === "Feature" || record.typename === "Requirement") {
-      setLoading(true);
+      setLoadingModel(true);
       const fetchModel =
         record.typename === "Feature"
           ? aha.models.Feature.select("teamId").find(record.id)
@@ -26,27 +27,29 @@ export const useTeamSettings = (
           setTeamId(model.teamId);
         })
         .finally(() => {
-          setLoading(false);
+          setLoadingModel(false);
         });
+    } else {
+      setLoadingModel(false);
     }
   }, [record]);
 
   useEffect(() => {
     // If the context has a getSettings method, use it to fetch settings for the team.
     if ("getSettings" in context && teamId) {
-      setLoading(true);
+      setLoadingSettings(true);
       context
         .getSettings({ teamId })
         .then(setSettings)
         .finally(() => {
-          setLoading(false);
+          setLoadingSettings(false);
         });
     } else {
       // Default to using context.settings if getSettings is not available
       setSettings(context.settings);
-      setLoading(false);
+      setLoadingSettings(false);
     }
   }, [teamId]);
 
-  return [settings, { loading }] as const;
+  return [settings, { loading: loadingModel || loadingSettings }] as const;
 };
