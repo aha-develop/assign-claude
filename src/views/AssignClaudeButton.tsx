@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { SendToAI } from "@aha-app/aha-develop-react";
+import React, { useCallback, useState } from "react";
 import { buildIssue, ClaudeIssueData, RecordType } from "../lib/buildIssue";
 import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
 import { createIssue, getGitHubToken } from "../lib/github";
+import { useTeamSettings } from "../lib/useTeamSettings";
 import { Icon } from "./Icon";
-import { SendToAI } from "./SendToAI";
 
 type AssignClaudeButtonProps = {
   record: RecordType;
@@ -205,39 +206,6 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
   );
 };
 
-// Consider moving this hook to https://github.com/aha-develop/aha-develop-react
-const useTeamSettings = (context: Aha.Context) => {
-  const [settings, setSettings] = useState<Aha.Settings>();
-  const [loading, setLoading] = useState(true);
-  // @see https://github.com/aha-app/aha-app/blob/7ac617e3d5aca077ee4df837ab1f6dd7cbc1de11/global_window.d.ts#L201-L216
-  const teamId =
-    "currentProject" in window &&
-    typeof window.currentProject === "object" &&
-    window.currentProject &&
-    "id" in window.currentProject &&
-    typeof window.currentProject.id === "string" &&
-    "isTeam" in window.currentProject &&
-    window.currentProject.isTeam
-      ? window.currentProject.id
-      : undefined;
-
-  useEffect(() => {
-    if (teamId && "getSettings" in context) {
-      context
-        .getSettings({ teamId })
-        .then(setSettings)
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
-      setSettings(context.settings);
-      setLoading(false);
-    }
-  }, [teamId]);
-
-  return [settings, { loading }] as const;
-};
-
 const AssignToClaude = ({
   context,
   record,
@@ -247,10 +215,11 @@ const AssignToClaude = ({
   record: RecordType;
   existingIssue?: ClaudeIssueData;
 }) => {
-  const [settings, { loading }] = useTeamSettings(context);
+  const [settings, { loading }] = useTeamSettings(context, record);
   if (loading || !settings) {
     return <aha-spinner size="20px" />;
   }
+  console.log({ settings, loading });
   return (
     <AssignClaudeButton
       record={record}
