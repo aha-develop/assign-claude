@@ -1,20 +1,32 @@
 import { SendToAI } from "@aha-app/aha-develop-react";
 import React, { useCallback, useState } from "react";
-import { buildIssue, ClaudeIssueData, RecordType } from "../lib/buildIssue";
+import { buildIssue, RecordType } from "../lib/buildIssue";
 import { EXTENSION_ID, FIELD_NAME } from "../lib/constants";
-import { createIssue, getGitHubToken } from "../lib/github";
+import {
+  bootstrapPullRequest,
+  commentOnPullRequest,
+  dispatchClaudeWorkflow,
+  getGitHubToken,
+} from "../lib/github";
+import {
+  assignmentForMode,
+  ClaudeAssignmentData,
+  ClaudeSettings,
+  isPullRequestAssignment,
+  MentionPullRequestAssignmentData,
+  parsePullRequestLabels,
+  StoredClaudeData,
+  storeAssignment,
+  triggerModeFor,
+  WorkflowAssignmentData,
+} from "../lib/types";
 import { useTeamSettings } from "../lib/useTeamSettings";
 import { Icon } from "./Icon";
 
 type AssignClaudeButtonProps = {
   record: RecordType;
-  settings: {
-    repository?: string;
-    baseBranch?: string;
-    customInstructions?: string;
-    claudeHandle?: string;
-  };
-  existingIssue?: ClaudeIssueData;
+  settings: ClaudeSettings;
+  existingAssignments?: StoredClaudeData;
 };
 
 type Status =
@@ -25,80 +37,144 @@ type Status =
   | "error"
   | "existing";
 
+function repositoryParts(repository: string | undefined): {
+  owner: string;
+  repo: string;
+} {
+  const parts = (repository ?? "")
+    .trim()
+    .split("/")
+    .map((part) => part.trim());
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error(
+      "Please configure the repository setting in owner/repo format.",
+    );
+  }
+  return { owner: parts[0], repo: parts[1] };
+}
+
 const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
   record,
   settings,
-  existingIssue,
+  existingAssignments,
 }) => {
-  const hasSettings = !!settings?.repository;
+  const mode = triggerModeFor(settings);
+  const matchingAssignment = assignmentForMode(existingAssignments, mode);
+  const hasSettings = !!settings.repository;
 
+  const [storedAssignments, setStoredAssignments] = useState<
+    StoredClaudeData | undefined
+  >(existingAssignments);
+  const [assignment, setAssignment] = useState<
+    ClaudeAssignmentData | undefined
+  >(matchingAssignment);
   const [status, setStatus] = useState<Status>(
-    existingIssue ? "existing" : hasSettings ? "idle" : "not-configured",
+    matchingAssignment
+      ? "existing"
+      : hasSettings
+        ? "idle"
+        : "not-configured",
   );
   const [message, setMessage] = useState<string>(
-    existingIssue ? "Assigned to Claude." : "",
-  );
-  const [issueUrl, setIssueUrl] = useState<string>(
-    existingIssue?.issueUrl || "",
+    matchingAssignment ? "Assigned to Claude." : "",
   );
 
   const handleClick = useCallback(
-    async (e: React.MouseEvent) => {
-      e.preventDefault();
+    async (event: React.MouseEvent) => {
+      event.preventDefault();
       setStatus("loading");
       setMessage("Loading record details...");
 
       try {
-        const repository = settings.repository;
-        if (
-          !repository ||
-          typeof repository !== "string" ||
-          !repository.includes("/")
-        ) {
-          throw new Error(
-            "Please configure the repository setting (e.g., owner/repo)",
-          );
-        }
-        const [owner, repo] = repository.trim().split("/");
-
-        const baseBranch = settings.baseBranch;
-        if (!baseBranch || typeof baseBranch !== "string") {
-          throw new Error("Please configure the base branch setting");
+        const { owner, repo } = repositoryParts(settings.repository);
+        const workflowFile = (settings.workflowFile ?? "claude.yml").trim();
+        if (mode === "workflow" && !workflowFile) {
+          throw new Error("Please configure the Claude workflow file.");
         }
 
-        const customInstructions =
-          "customInstructions" in settings &&
-          typeof settings.customInstructions === "string"
-            ? settings.customInstructions
-            : undefined;
-
-        const { title, body, comment } = await buildIssue({
+        const { title, body, comment, model } = await buildIssue({
           record,
-          customInstructions,
+          customInstructions:
+            typeof settings.customInstructions === "string"
+              ? settings.customInstructions
+              : undefined,
           claudeHandle: settings.claudeHandle,
         });
 
         setMessage("Authenticating with GitHub...");
-        const token = await getGitHubToken();
-
-        setMessage("Creating GitHub Issue...");
-        const issue = await createIssue(token, {
+        const token = await getGitHubToken(mode);
+        const now = new Date().toISOString();
+        setMessage("Creating or finding the pull request...");
+        const bootstrap = await bootstrapPullRequest(token, {
           owner,
           repo,
+          referenceNum: model.referenceNum,
           title,
           body,
-          comment,
+          labels: parsePullRequestLabels(settings.pullRequestLabels),
         });
+        const currentPullRequestAssignment =
+          assignment && isPullRequestAssignment(assignment)
+            ? assignment
+            : undefined;
+        const commonAssignment = {
+          prNumber: bootstrap.prNumber,
+          prUrl: bootstrap.prUrl,
+          branch: bootstrap.branch,
+          assignedAt: currentPullRequestAssignment?.assignedAt ?? now,
+          lastTriggeredAt: now,
+        };
+        const nextAssignment:
+          | MentionPullRequestAssignmentData
+          | WorkflowAssignmentData =
+          mode === "mention"
+            ? {
+                mode: "mention",
+                ...commonAssignment,
+              }
+            : {
+                mode: "workflow",
+                ...commonAssignment,
+              };
 
-        await record.setExtensionField(EXTENSION_ID, FIELD_NAME, {
-          issueNumber: issue.number,
-          issueUrl: issue.html_url,
-          assignedAt: new Date().toISOString(),
-        } as ClaudeIssueData);
+        // Keep the PR reachable if triggering Claude fails. It is persisted
+        // after a successful trigger, and bootstrap finds it again on retry.
+        setAssignment(nextAssignment);
+        if (mode === "mention") {
+          setMessage("Mentioning Claude on the pull request...");
+          await commentOnPullRequest(token, {
+            owner,
+            repo,
+            prNumber: bootstrap.prNumber,
+            comment,
+          });
+          setMessage("Claude mentioned on the pull request.");
+        } else {
+          setMessage(`Dispatching ${workflowFile}...`);
+          await dispatchClaudeWorkflow(token, {
+            owner,
+            repo,
+            workflowFile,
+            ref: bootstrap.baseBranch,
+            referenceNum: model.referenceNum,
+            prompt: body,
+            prNumber: bootstrap.prNumber,
+          });
+          setMessage("Claude workflow dispatched.");
+        }
+
+        const nextStoredAssignments = storeAssignment(
+          storedAssignments,
+          nextAssignment,
+        );
+        await record.setExtensionField(
+          EXTENSION_ID,
+          FIELD_NAME,
+          nextStoredAssignments,
+        );
+        setStoredAssignments(nextStoredAssignments);
 
         setStatus("success");
-        setMessage("GitHub Issue created and assigned to Claude.");
-        setIssueUrl(issue.html_url);
       } catch (error) {
         setStatus("error");
         const errorMessage =
@@ -106,114 +182,156 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
         setMessage(`Error: ${errorMessage}`);
       }
     },
-    [record, settings],
+    [assignment, mode, record, settings, storedAssignments],
   );
 
-  return (
-    <>
-      {(status === "idle" ||
-        status === "error" ||
-        status === "not-configured") && (
-        <SendToAI
-          label="Build with Claude"
-          icon={<Icon />}
-          button={
-            status === "not-configured" ? (
-              <aha-button
-                kind="secondary"
-                size="small"
-                onClick={(e) => {
-                  e.preventDefault();
-                  window.open("/develop/settings/account/extensions");
-                }}
-              >
-                Configure Claude <i className="fa-regular fa-gear"></i>
-              </aha-button>
-            ) : (
-              <aha-button kind="secondary" size="small" onClick={handleClick}>
-                Send to Claude <i className="fa-regular fa-arrow-right"></i>
-              </aha-button>
-            )
-          }
-          footer={`Share this ${record.typename.toLowerCase()} with Claude to begin implementation.`}
-          alert={
-            status === "error" ? (
-              <aha-alert
-                type="danger"
-                size="mini"
-                style={{
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  overflowWrap: "break-word",
-                }}
-              >
-                {message}
-              </aha-alert>
-            ) : null
-          }
-        />
-      )}
+  if (status === "loading") {
+    return (
+      <SendToAI
+        label="Sending to Claude..."
+        icon={<Icon />}
+        button={
+          <aha-button kind="secondary" size="small" disabled>
+            Working
+            <aha-spinner style={{ marginLeft: "6px" }} size="10px" />
+          </aha-button>
+        }
+        footer={message}
+      />
+    );
+  }
 
-      {status === "loading" && (
-        <SendToAI
-          label="Sending to Claude..."
-          icon={<Icon />}
-          button={
+  if (status === "not-configured") {
+    return (
+      <SendToAI
+        label="Build with Claude"
+        icon={<Icon />}
+        button={
+          <aha-button
+            kind="secondary"
+            size="small"
+            onClick={(event) => {
+              event.preventDefault();
+              window.open("/develop/settings/account/extensions");
+            }}
+          >
+            Configure Claude <i className="fa-regular fa-gear" />
+          </aha-button>
+        }
+        footer="Configure a GitHub repository before sending work to Claude."
+      />
+    );
+  }
+
+  if (assignment) {
+    const pullRequestAssignment = isPullRequestAssignment(assignment)
+      ? assignment
+      : undefined;
+    const url = pullRequestAssignment
+      ? pullRequestAssignment.prUrl
+      : "issueUrl" in assignment
+        ? assignment.issueUrl
+        : "";
+    return (
+      <SendToAI
+        label="Assigned to Claude"
+        icon={<Icon />}
+        button={
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
             <aha-button
               kind="secondary"
               size="small"
-              onClick={(e) => {
-                e.preventDefault();
+              onClick={(event) => {
+                event.preventDefault();
+                window.open(url, "_blank", "noopener noreferrer");
               }}
             >
-              <span>
-                Creating issue
-                <aha-spinner style={{ marginLeft: "6px" }} size="10px" />
-              </span>
-            </aha-button>
-          }
-          footer={message}
-        />
-      )}
-
-      {(status === "success" || status === "existing") && (
-        <SendToAI
-          label="Assigned to Claude"
-          icon={<Icon />}
-          button={
-            <aha-button
-              kind="secondary"
-              size="small"
-              onClick={(e) => {
-                e.preventDefault();
-                window.open(issueUrl, "_blank", "noopener noreferrer");
-              }}
-            >
-              View issue
+              View {pullRequestAssignment ? "PR" : "issue"}
               <i className="fa-regular fa-arrow-up-right" />
             </aha-button>
-          }
-          alert={
-            status === "success" ? (
-              <aha-alert type="success" size="mini">
-                {message}
-              </aha-alert>
-            ) : null
-          }
-        />
-      )}
-    </>
+            <aha-button
+              kind="secondary"
+              size="small"
+              onClick={handleClick}
+            >
+              {pullRequestAssignment ? "Run again" : "Create PR"}
+              <i
+                className={
+                  pullRequestAssignment
+                    ? "fa-regular fa-rotate-right"
+                    : "fa-regular fa-code-pull-request"
+                }
+              />
+            </aha-button>
+          </span>
+        }
+        footer={
+          pullRequestAssignment
+            ? `Claude is working from ${pullRequestAssignment.branch}.`
+            : "This legacy issue assignment can be moved to a pull request."
+        }
+        alert={
+          status === "success" || status === "error" ? (
+            <aha-alert
+              type={status === "error" ? "danger" : "success"}
+              size="mini"
+              style={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+              }}
+            >
+              {message}
+            </aha-alert>
+          ) : null
+        }
+      />
+    );
+  }
+
+  return (
+    <SendToAI
+      label="Build with Claude"
+      icon={<Icon />}
+      button={
+        <aha-button kind="secondary" size="small" onClick={handleClick}>
+          Send to Claude <i className="fa-regular fa-arrow-right" />
+        </aha-button>
+      }
+      footer={`Share this ${record.typename.toLowerCase()} with Claude to begin implementation.`}
+      alert={
+        status === "error" ? (
+          <aha-alert
+            type="danger"
+            size="mini"
+            style={{
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              overflowWrap: "break-word",
+            }}
+          >
+            {message}
+          </aha-alert>
+        ) : null
+      }
+    />
   );
 };
 
 const AssignToClaude = ({
   context,
   record,
-  existingIssue,
+  existingAssignments,
 }: {
   context: Aha.Context;
   record: RecordType;
-  existingIssue?: ClaudeIssueData;
+  existingAssignments?: StoredClaudeData;
 }) => {
   const [settings, { loading }] = useTeamSettings(context, record);
   if (loading || !settings) {
@@ -222,21 +340,23 @@ const AssignToClaude = ({
   return (
     <AssignClaudeButton
       record={record}
-      settings={settings}
-      existingIssue={existingIssue}
+      settings={settings as ClaudeSettings}
+      existingAssignments={existingAssignments}
     />
   );
 };
 
 aha.on("assignClaudeButton", ({ record, fields }, context) => {
   const typedRecord = record as unknown as RecordType;
-  const existingIssue = fields?.[FIELD_NAME] as ClaudeIssueData | undefined;
+  const existingAssignments = fields?.[FIELD_NAME] as
+    | StoredClaudeData
+    | undefined;
 
   return (
     <AssignToClaude
       context={context}
       record={typedRecord}
-      existingIssue={existingIssue}
+      existingAssignments={existingAssignments}
     />
   );
 });
