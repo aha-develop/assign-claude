@@ -168,7 +168,7 @@ async function createEmptyCommit(
     "POST",
     `/repos/${owner}/${repo}/git/commits`,
     {
-      message: `${referenceNum || "NOREF"} Start Claude work`,
+      message: `${referenceNum || "NOREF"} Start Claude work [skip ci]`,
       tree: baseCommit.tree.sha,
       parents: [baseSha],
     },
