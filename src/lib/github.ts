@@ -15,11 +15,23 @@ interface GitPullRequest {
   number: number;
 }
 
+interface GitHubWorkflowDispatch {
+  workflow_run_id: number;
+  run_url: string;
+  html_url: string;
+}
+
 export interface PullRequestBootstrap {
   baseBranch: string;
   branch: string;
   prNumber: number;
   prUrl: string;
+}
+
+export interface WorkflowDispatch {
+  workflowRunId: number;
+  runUrl: string;
+  htmlUrl: string;
 }
 
 class GitHubRequestError extends Error {
@@ -221,12 +233,7 @@ export async function bootstrapPullRequest(
   for (const branch of candidates) {
     const branchRef = await findRef(token, owner, repo, branch);
     if (branchRef) {
-      const existingPr = await findOpenPullRequest(
-        token,
-        owner,
-        repo,
-        branch,
-      );
+      const existingPr = await findOpenPullRequest(token, owner, repo, branch);
       if (existingPr) {
         await applyLabels(token, owner, repo, existingPr.number, labels);
         return {
@@ -301,17 +308,10 @@ export async function dispatchClaudeWorkflow(
     prompt: string;
     prNumber: number;
   },
-): Promise<void> {
-  const {
-    owner,
-    repo,
-    workflowFile,
-    ref,
-    referenceNum,
-    prompt,
-    prNumber,
-  } = options;
-  await restRequest(
+): Promise<WorkflowDispatch> {
+  const { owner, repo, workflowFile, ref, referenceNum, prompt, prNumber } =
+    options;
+  const dispatch = await restRequest<GitHubWorkflowDispatch>(
     token,
     "POST",
     `/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(
@@ -319,6 +319,7 @@ export async function dispatchClaudeWorkflow(
     )}/dispatches`,
     {
       ref,
+      return_run_details: true,
       inputs: {
         feature_reference: referenceNum,
         prompt,
@@ -326,4 +327,9 @@ export async function dispatchClaudeWorkflow(
       },
     },
   );
+  return {
+    workflowRunId: dispatch.workflow_run_id,
+    runUrl: dispatch.run_url,
+    htmlUrl: dispatch.html_url,
+  };
 }

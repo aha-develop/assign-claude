@@ -43,6 +43,8 @@ describe("stored assignments", () => {
       branch: "claude/DEV-42",
       assignedAt: "2026-08-11T00:00:00.000Z",
       lastTriggeredAt: "2026-08-11T00:00:00.000Z",
+      workflowRunId: 1234,
+      workflowRunUrl: "https://github.com/acme/app/actions/runs/1234",
     });
 
     expect(stored.mention).toMatchObject({
@@ -50,6 +52,9 @@ describe("stored assignments", () => {
       issueNumber: 12,
     });
     expect(stored.workflow?.prNumber).toBe(42);
+    expect(stored.workflow?.workflowRunUrl).toBe(
+      "https://github.com/acme/app/actions/runs/1234",
+    );
   });
 
   it("stores a mention-triggered pull request in mention mode", () => {

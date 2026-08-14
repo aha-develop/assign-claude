@@ -180,27 +180,38 @@ describe("bootstrapPullRequest", () => {
 });
 
 describe("dispatchClaudeWorkflow", () => {
-  it("passes the existing PR and task to the configured workflow", async () => {
+  it("returns the dispatched workflow run", async () => {
     const calls = mockGitHub([
       {
         method: "POST",
         path: "/repos/acme/app/actions/workflows/claude.yml/dispatches",
-        status: 204,
+        body: {
+          workflow_run_id: 1234,
+          run_url: "https://api.github.com/repos/acme/app/actions/runs/1234",
+          html_url: "https://github.com/acme/app/actions/runs/1234",
+        },
       },
     ]);
 
-    await dispatchClaudeWorkflow("token", {
-      owner: "acme",
-      repo: "app",
-      workflowFile: "claude.yml",
-      ref: "master",
-      referenceNum: "DEV-42",
-      prompt: "Task details",
-      prNumber: 42,
+    await expect(
+      dispatchClaudeWorkflow("token", {
+        owner: "acme",
+        repo: "app",
+        workflowFile: "claude.yml",
+        ref: "master",
+        referenceNum: "DEV-42",
+        prompt: "Task details",
+        prNumber: 42,
+      }),
+    ).resolves.toEqual({
+      workflowRunId: 1234,
+      runUrl: "https://api.github.com/repos/acme/app/actions/runs/1234",
+      htmlUrl: "https://github.com/acme/app/actions/runs/1234",
     });
 
     expect(calls[0].body).toEqual({
       ref: "master",
+      return_run_details: true,
       inputs: {
         feature_reference: "DEV-42",
         prompt: "Task details",

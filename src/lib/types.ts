@@ -39,6 +39,8 @@ export interface WorkflowAssignmentData {
   branch: string;
   assignedAt: string;
   lastTriggeredAt: string;
+  workflowRunId?: number;
+  workflowRunUrl?: string;
 }
 
 export type ClaudeAssignmentData =

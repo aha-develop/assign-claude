@@ -69,11 +69,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
     ClaudeAssignmentData | undefined
   >(matchingAssignment);
   const [status, setStatus] = useState<Status>(
-    matchingAssignment
-      ? "existing"
-      : hasSettings
-        ? "idle"
-        : "not-configured",
+    matchingAssignment ? "existing" : hasSettings ? "idle" : "not-configured",
   );
   const [message, setMessage] = useState<string>(
     matchingAssignment ? "Assigned to Claude." : "",
@@ -124,23 +120,17 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
           assignedAt: currentPullRequestAssignment?.assignedAt ?? now,
           lastTriggeredAt: now,
         };
-        const nextAssignment:
+        let nextAssignment:
           | MentionPullRequestAssignmentData
-          | WorkflowAssignmentData =
-          mode === "mention"
-            ? {
-                mode: "mention",
-                ...commonAssignment,
-              }
-            : {
-                mode: "workflow",
-                ...commonAssignment,
-              };
-
-        // Keep the PR reachable if triggering Claude fails. It is persisted
-        // after a successful trigger, and bootstrap finds it again on retry.
-        setAssignment(nextAssignment);
+          | WorkflowAssignmentData;
         if (mode === "mention") {
+          nextAssignment = {
+            mode: "mention",
+            ...commonAssignment,
+          };
+          // Keep the PR reachable if triggering Claude fails. It is persisted
+          // after a successful trigger, and bootstrap finds it again on retry.
+          setAssignment(nextAssignment);
           setMessage("Mentioning Claude on the pull request...");
           await commentOnPullRequest(token, {
             owner,
@@ -150,8 +140,13 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
           });
           setMessage("Claude mentioned on the pull request.");
         } else {
+          const pendingAssignment: WorkflowAssignmentData = {
+            mode: "workflow",
+            ...commonAssignment,
+          };
+          setAssignment(pendingAssignment);
           setMessage(`Dispatching ${workflowFile}...`);
-          await dispatchClaudeWorkflow(token, {
+          const dispatch = await dispatchClaudeWorkflow(token, {
             owner,
             repo,
             workflowFile,
@@ -160,6 +155,12 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
             prompt: body,
             prNumber: bootstrap.prNumber,
           });
+          nextAssignment = {
+            ...pendingAssignment,
+            workflowRunId: dispatch.workflowRunId,
+            workflowRunUrl: dispatch.htmlUrl,
+          };
+          setAssignment(nextAssignment);
           setMessage("Claude workflow dispatched.");
         }
 
@@ -232,6 +233,8 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
       : "issueUrl" in assignment
         ? assignment.issueUrl
         : "";
+    const workflowRunUrl =
+      "workflowRunUrl" in assignment ? assignment.workflowRunUrl : undefined;
     return (
       <SendToAI
         label="Assigned to Claude"
@@ -255,26 +258,33 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
               View {pullRequestAssignment ? "PR" : "issue"}
               <i className="fa-regular fa-arrow-up-right" />
             </aha-button>
-            <aha-button
-              kind="secondary"
-              size="small"
-              onClick={handleClick}
-            >
-              {pullRequestAssignment ? "Run again" : "Create PR"}
-              <i
-                className={
-                  pullRequestAssignment
-                    ? "fa-regular fa-rotate-right"
-                    : "fa-regular fa-code-pull-request"
-                }
-              />
-            </aha-button>
+            {workflowRunUrl ? (
+              <aha-button
+                kind="secondary"
+                size="small"
+                onClick={(event) => {
+                  event.preventDefault();
+                  window.open(workflowRunUrl, "_blank", "noopener noreferrer");
+                }}
+              >
+                View run <i className="fa-regular fa-arrow-up-right" />
+              </aha-button>
+            ) : null}
+            {!pullRequestAssignment ? (
+              <aha-button
+                kind="secondary"
+                size="small"
+                onClick={handleClick}
+              >
+                Create PR <i className="fa-regular fa-code-pull-request" />
+              </aha-button>
+            ) : null}
           </span>
         }
         footer={
-          pullRequestAssignment
-            ? `Claude is working from ${pullRequestAssignment.branch}.`
-            : "This legacy issue assignment can be moved to a pull request."
+          !pullRequestAssignment
+            ? "This legacy issue assignment can be moved to a pull request."
+            : null
         }
         alert={
           status === "success" || status === "error" ? (
