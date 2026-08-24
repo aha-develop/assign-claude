@@ -49,16 +49,16 @@
         },
         "triggerMode": {
           "title": "Claude Trigger",
-          "description": "Create a draft pull request, then mention Claude or dispatch a workflow.",
+          "description": "Mention mode works with the standard @claude workflow. Dispatch mode requires the compatible workflow template linked below.",
           "type": "string",
           "default": "mention",
           "options": [
             {
-              "label": "Mention @claude on the pull request",
+              "label": "Mention @claude (standard workflow)",
               "value": "mention"
             },
             {
-              "label": "Dispatch a GitHub workflow",
+              "label": "Dispatch a workflow (template required)",
               "value": "workflow"
             }
           ],
@@ -69,8 +69,8 @@
           ]
         },
         "workflowFile": {
-          "title": "Claude Workflow File",
-          "description": "Workflow to dispatch in workflow mode (for example, claude.yml).",
+          "title": "Workflow File (dispatch mode only)",
+          "description": "Targets this file in .github/workflows. The workflow must accept feature_reference, prompt, and pr_number. See the extensions example at examples/claude.yml",
           "type": "string",
           "default": "claude.yml",
           "scope": [

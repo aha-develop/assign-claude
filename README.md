@@ -8,27 +8,35 @@ GitHub. Teams can choose between two trigger modes:
 - **Workflow mode** creates the same kind of draft pull request, then dispatches
   a workflow such as `claude.yml`.
 
-Both modes apply configured labels before triggering Claude. Creating the pull
-request as the triggering user lets GitHub enforce its normal rule that pull
-request authors cannot approve their own work.
-
 We recommend using this extension with the
 [GitHub Develop extension](https://github.com/aha-develop/github).
 
 ## Configuration
 
-| Setting | Description |
-| --- | --- |
-| **GitHub Repository** | Target repository in `owner/repo` format. |
-| **Claude Trigger** | Mention `@claude` in an issue, or dispatch a GitHub workflow. Defaults to mention mode. |
-| **Claude Workflow File** | Workflow file dispatched in workflow mode. Defaults to `claude.yml`. |
-| **Pull Request Labels** | Labels applied to created pull requests, one per line. Labels must already exist in GitHub. |
-| **Claude Handle** | Handle mentioned on the pull request in mention mode. Defaults to `claude`. |
-| **Custom Instructions for Claude** | Additional markdown appended to the task details in either mode. |
+| Setting                                | Description                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **GitHub Repository**                  | Target repository in `owner/repo` format.                                                                          |
+| **Claude Trigger**                     | Mention `@claude` using the standard Claude workflow, or dispatch a compatible workflow. Defaults to mention mode. |
+| **Workflow File (dispatch mode only)** | Compatible workflow in `.github/workflows` on the repository's default branch. Defaults to `claude.yml`.           |
+| **Pull Request Labels**                | Labels applied to created pull requests, one per line. Labels must already exist in GitHub.                        |
+| **Claude Handle**                      | Handle mentioned on the pull request in mention mode. Defaults to `claude`.                                        |
+| **Custom Instructions for Claude**     | Additional markdown appended to the task details in either mode.                                                   |
 
 Settings can be scoped per account, team, or user as defined in `package.json`.
 
+## Mention mode
+
+Mention mode posts a comment on the user-authored pull request asking the
+configured Claude handle to implement the task described in its body. The
+target workflow must listen for `issue_comment` events and treat comments on
+pull requests as work on the existing PR.
+
 ## Workflow mode
+
+Copy the [minimal public workflow template](examples/claude.yml) to
+`.github/workflows/claude.yml` in the target repository and add an
+`ANTHROPIC_API_KEY` repository secret. You can then extend the workflow with
+project-specific setup and test steps.
 
 Workflow mode discovers the repository's default branch, creates a
 `claude/<reference>` branch with an empty commit, and opens a draft pull request
@@ -46,29 +54,9 @@ on:
         required: true
         type: string
       pr_number:
-        required: false
+        required: true
         type: string
 ```
-
-The extension always sends `pr_number`; declaring it as optional also allows
-the workflow to support other trigger paths. The workflow should check it out
-and make its changes on that existing pull request. The OAuth token remains in
-the browser and is not passed as a workflow input.
-
-Running Claude again in either mode reuses the existing open pull request and
-reapplies the configured labels before triggering. If a previous pull request
-was closed or merged without deleting its branch, the extension tries a bounded
-sequence of suffixed branches such as `claude/DEV-123-2`.
-
-## Mention mode
-
-Mention mode posts a comment on the user-authored pull request asking the
-configured Claude handle to implement the task described in its body. The
-target workflow must listen for `issue_comment` events and treat comments on
-pull requests as work on the existing PR.
-
-Legacy issue assignments remain viewable. The UI offers to create a pull
-request when an old issue-only assignment is encountered.
 
 ## Installing the extension
 
