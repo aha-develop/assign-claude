@@ -7,7 +7,7 @@ function slugify(value: string): string {
 
 export function branchNameFor(referenceNum: string): string {
   const slug = slugify(referenceNum);
-  return `claude/${slug || "work"}`;
+  return slug || "claude-work";
 }
 
 const MAX_BRANCH_CANDIDATES = 5;
