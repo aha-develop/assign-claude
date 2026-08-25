@@ -40,7 +40,7 @@ describe("stored assignments", () => {
       mode: "workflow",
       prNumber: 42,
       prUrl: "https://github.com/acme/app/pull/42",
-      branch: "claude/DEV-42",
+      branch: "DEV-42",
       assignedAt: "2026-08-11T00:00:00.000Z",
       lastTriggeredAt: "2026-08-11T00:00:00.000Z",
       workflowRunId: 1234,
@@ -62,7 +62,7 @@ describe("stored assignments", () => {
       mode: "mention",
       prNumber: 43,
       prUrl: "https://github.com/acme/app/pull/43",
-      branch: "claude/DEV-43",
+      branch: "DEV-43",
       assignedAt: "2026-08-11T00:00:00.000Z",
       lastTriggeredAt: "2026-08-11T00:00:00.000Z",
     });
