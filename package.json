@@ -1,18 +1,28 @@
 {
   "name": "aha-develop.assign-claude",
   "description": "Claude",
-  "version": "1.2.1",
+  "version": "2.0.0",
   "author": "Aha! (support@aha.io)",
   "repository": {
     "type": "git",
     "url": "https://github.com/aha-develop/assign-claude"
   },
   "license": "MIT",
+  "scripts": {
+    "test": "jest"
+  },
   "devDependencies": {
+    "@types/jest": "^29.5.0",
     "@types/react": "^16.14.68",
-    "aha-cli": "^1.17.0"
+    "aha-cli": "^1.17.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^4.9.5"
   },
   "ahaExtension": {
+    "cspSources": [
+      "https://api.github.com"
+    ],
     "contributes": {
       "views": {
         "assignClaudeButton": {
@@ -37,11 +47,42 @@
             "user"
           ]
         },
-        "baseBranch": {
-          "title": "Base Branch",
-          "description": "The branch to create PRs against",
+        "triggerMode": {
+          "title": "Claude Trigger",
+          "description": "Mention mode works with the standard @claude workflow. Dispatch mode requires the compatible workflow template linked below.",
           "type": "string",
-          "default": "main",
+          "default": "mention",
+          "options": [
+            {
+              "label": "Mention @claude (standard workflow)",
+              "value": "mention"
+            },
+            {
+              "label": "Dispatch a workflow (template required)",
+              "value": "workflow"
+            }
+          ],
+          "scope": [
+            "account",
+            "team",
+            "user"
+          ]
+        },
+        "workflowFile": {
+          "title": "Workflow File (dispatch mode only)",
+          "description": "Targets this file in .github/workflows. The workflow must accept feature_reference, prompt, and pr_number. See the extensions example at examples/claude.yml",
+          "type": "string",
+          "default": "claude.yml",
+          "scope": [
+            "account",
+            "team",
+            "user"
+          ]
+        },
+        "pullRequestLabels": {
+          "title": "Pull Request Labels",
+          "description": "Labels to apply to created pull requests, one label per line.",
+          "type": "string",
           "scope": [
             "account",
             "team",
@@ -50,7 +91,7 @@
         },
         "claudeHandle": {
           "title": "Claude Handle",
-          "description": "The handle to mention Claude (e.g., claude)",
+          "description": "The handle to mention in pull request mention mode (e.g., claude)",
           "type": "string",
           "default": "claude",
           "scope": [
@@ -60,7 +101,7 @@
         },
         "customInstructions": {
           "title": "Custom Instructions for Claude",
-          "description": "Additional instructions to include as part of the @claude mention",
+          "description": "Additional instructions to include in the task sent to Claude.",
           "type": "string",
           "scope": [
             "account",

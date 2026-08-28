@@ -47,15 +47,6 @@ type RecordAttachment = {
 export type RecordType = FeatureType | RequirementType;
 
 /**
- * Data stored in extension fields to track Claude assignment.
- */
-export interface ClaudeIssueData {
-  issueNumber: number;
-  issueUrl: string;
-  assignedAt: string;
-}
-
-/**
  * Fetches full record details including name, path, and description.
  */
 async function describeFeature(record: {
@@ -177,10 +168,9 @@ ${
 }
 
 /**
- * Builds the issue body for a GitHub issue to be assigned to Claude.
+ * Builds the task details used by both Claude trigger modes.
  *
  * @param record - The minimal record from the Aha! context
- * @param baseBranch - The base branch for PRs
  * @param customInstructions - Additional instructions for Claude (optional)
  */
 export async function buildIssue({
@@ -212,11 +202,7 @@ export async function buildIssue({
   }
 
   const comment = `
-@${claudeHandle ? claudeHandle.replace(/^@/, "") : "claude"} please create a pull request to implement this feature.
-
-**IMPORTANT - Branch and PR Naming Requirement:**
-- You MUST include \`${model.referenceNum}\` in the branch name
-- You MUST include \`${model.referenceNum}\` in the PR title
+@${claudeHandle ? claudeHandle.replace(/^@/, "") : "claude"} please implement the task described in this pull request. Work on the existing branch and pull request.
 `;
 
   if (customInstructions) {

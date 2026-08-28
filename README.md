@@ -1,24 +1,70 @@
 # Assign to Claude
 
-This is an extension for [Aha! Develop](https://www.aha.io/develop) which provides a way to send the details of Features and Requirements Github as an issue and mention @claude.
+This Aha! Develop extension sends Features and Requirements to Claude through
+GitHub. Teams can choose between two trigger modes:
 
-You need to have @claude configured within your Github repository per the instructions here; https://code.claude.com/docs/en/github-actions
+- **Mention mode** creates a draft pull request as the signed-in GitHub user,
+  then comments with `@claude`. This remains the default trigger mode.
+- **Workflow mode** creates the same kind of draft pull request, then dispatches
+  a workflow such as `claude.yml`.
 
-We recommend using this extension in combination with the [Github Develop extension](https://github.com/aha-develop/github)
+We recommend using this extension with the
+[GitHub Develop extension](https://github.com/aha-develop/github).
 
-<img width="754" height="67" alt="image" src="https://github.com/user-attachments/assets/925b176f-af6e-4aa4-b1ca-6600be115cd2" />
+## Configuration
 
-<img width="754" height="45" alt="image" src="https://github.com/user-attachments/assets/71cd0f22-4fd8-4fe0-af75-613f8650b2d9" />
+| Setting                                | Description                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **GitHub Repository**                  | Target repository in `owner/repo` format.                                                                          |
+| **Claude Trigger**                     | Mention `@claude` using the standard Claude workflow, or dispatch a compatible workflow. Defaults to mention mode. |
+| **Workflow File (dispatch mode only)** | Compatible workflow in `.github/workflows` on the repository's default branch. Defaults to `claude.yml`.           |
+| **Pull Request Labels**                | Labels applied to created pull requests, one per line. Labels must already exist in GitHub.                        |
+| **Claude Handle**                      | Handle mentioned on the pull request in mention mode. Defaults to `claude`.                                        |
+| **Custom Instructions for Claude**     | Additional markdown appended to the task details in either mode.                                                   |
 
-## Demo
+Settings can be scoped per account, team, or user as defined in `package.json`.
 
-[demo.mp4](https://github.com/user-attachments/assets/01ed113a-e199-4d5e-8dbc-e2c9de317aba)
+## Mention mode
+
+Mention mode posts a comment on the user-authored pull request asking the
+configured Claude handle to implement the task described in its body. The
+target workflow must listen for `issue_comment` events and treat comments on
+pull requests as work on the existing PR.
+
+## Workflow mode
+
+Copy the [minimal public workflow template](examples/claude.yml) to
+`.github/workflows/claude.yml` in the target repository and add an
+`ANTHROPIC_API_KEY` repository secret. You can then extend the workflow with
+project-specific setup and test steps.
+
+Workflow mode discovers the repository's default branch, creates a
+`<reference>` branch with an empty commit, and opens a draft pull request
+from it against the default branch. It then dispatches the configured workflow
+from the default branch with these inputs:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      feature_reference:
+        required: true
+        type: string
+      prompt:
+        required: true
+        type: string
+      pr_number:
+        required: true
+        type: string
+```
 
 ## Installing the extension
 
-**Note: In order to install an extension into your Aha! Develop account, you must be an account administrator.**
+**Note:** You must be an account administrator to install an extension into an
+Aha! Develop account.
 
-Install the extension by clicking [here](https://secure.aha.io/settings/account/extensions/install?url=https%3A%2F%2Fsecure.aha.io%2Fextensions%2Faha-develop.assign-claude.gz).
+Install the extension by clicking
+[here](https://secure.aha.io/settings/account/extensions/install?url=https%3A%2F%2Fsecure.aha.io%2Fextensions%2Faha-develop.assign-claude.gz).
 
 ## Working on the extension
 
@@ -28,33 +74,29 @@ Install [`aha-cli`](https://github.com/aha-app/aha-cli):
 npm install -g aha-cli
 ```
 
-Clone the repo:
-
-TODO: Add the repository URL here
+Clone the repository, install dependencies, then link and watch the extension:
 
 ```sh
-git clone ...
-```
-
-**Note: In order to install an extension into your Aha! Develop account, you must be an account administrator.**
-
-Install the extension into Aha! and set up a watcher:
-
-```sh
+npm install
 aha extension:install
 aha extension:watch
 ```
 
-Now, any change you make inside your working copy will automatically take effect in your Aha! account.
+Run the unit tests:
+
+```sh
+npm test
+```
 
 ## Building
 
-When you have finished working on your extension, package it into a `.gz` file so that others can install it:
+Build the installable `.gz` bundle:
 
 ```sh
 aha extension:build
 ```
 
-After building, you can upload the `.gz` file to a publicly accessible URL, such as a GitHub release, so that others can install it using that URL.
-
-To learn more about developing Aha! Develop extensions, including the API reference, the full documentation is located here: [Aha! Develop Extension API](https://www.aha.io/support/develop/extensions)
+The output can be uploaded to a GitHub release or another publicly accessible
+URL. See the
+[Aha! Develop Extension API](https://www.aha.io/support/develop/extensions)
+for extension platform documentation.

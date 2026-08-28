@@ -1,0 +1,48 @@
+name: Claude Code from Aha!
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature_reference:
+        description: Aha! feature or requirement reference
+        required: true
+        type: string
+      prompt:
+        description: Task for Claude to implement
+        required: true
+        type: string
+      pr_number:
+        description: Existing draft pull request to update
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  claude:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check out the pull request branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: gh pr checkout "$PR_NUMBER"
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            ${{ inputs.prompt }}
+
+            You are working on existing draft pull request #${{ inputs.pr_number }}.
+            Its branch is already checked out. Commit and push your changes to
+            the current branch, prefix commit messages with
+            "${{ inputs.feature_reference }}", and mark the pull request ready
+            for review when finished. Do not create another branch or pull request.

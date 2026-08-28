@@ -10,25 +10,30 @@
 ## What this extension does
 
 - Adds a custom attribute view titled "Claude Code" to Feature and Requirement records, surfaced from `assignClaudeButton` in `package.json`.
-- Renders `src/views/AssignClaudeButton.tsx`, a React component that lets users send the current record to GitHub and mention Claude.
-- Builds a GitHub issue payload via `src/lib/buildIssue.ts`, fetching enriched record details (description, requirements, tasks) and composing a structured markdown brief plus a mandatory branch/PR naming comment for the agent.
-- Uses `src/lib/github.ts` to request a GitHub OAuth token through `aha.auth`, create the issue, and add the comment with Claude instructions.
-- Stores the resulting issue metadata in an extension field (`claudeIssue`) so the UI can show existing assignments and offer a "View Issue" link.
+- Renders `src/views/AssignClaudeButton.tsx`, a React component that supports issue-mention and workflow-dispatch modes.
+- Builds the Claude task payload via `src/lib/buildIssue.ts`, fetching enriched record details (description, requirements, tasks) and composing a structured markdown brief plus the optional PR mention comment.
+- Both modes create or reuse a user-authored draft PR and apply configured labels.
+- In mention mode, uses `src/lib/github.ts` to comment on that PR with the configured Claude handle.
+- In workflow mode, dispatches the configured workflow with the record prompt and PR number.
+- Stores mode-specific issue and PR metadata in the `claudeIssue` extension field so assignments survive reloads and workflow runs can be triggered again.
 
 ## Settings expected from Aha!
 
 - `repository` (required): owner/repo string used to target the GitHub project.
-- `baseBranch`: default PR base (`main` if omitted).
-- `claudeHandle`: optional handle override when constructing the comment (defaults to `claude`).
-- `customInstructions`: extra markdown appended to the issue body.
-- All settings are defined in `package.json` and can be scoped per account or user. Missing `repository` keeps the UI in a "Configure Claude" state.
+- `triggerMode`: `mention` (default) or `workflow`.
+- `workflowFile`: workflow dispatched in workflow mode (defaults to `claude.yml`).
+- `pullRequestLabels`: newline-separated labels applied to created PRs.
+- `claudeHandle`: optional handle mentioned on the PR in mention mode (defaults to `claude`).
+- `customInstructions`: extra markdown appended to the task details in either mode.
+- All settings are defined in `package.json` and can be scoped per account, team, or user. Missing `repository` keeps the UI in a "Configure Claude" state.
 
 ## Key file map
 
 - Entry view: [src/views/AssignClaudeButton.tsx](src/views/AssignClaudeButton.tsx)
 - Issue builder: [src/lib/buildIssue.ts](src/lib/buildIssue.ts)
 - GitHub REST helper: [src/lib/github.ts](src/lib/github.ts)
-- Shared UI shell: [src/views/SendToAI.tsx](src/views/SendToAI.tsx)
+- Shared types and stored assignment migration: [src/lib/types.ts](src/lib/types.ts)
+- PR branch naming: [src/lib/prBootstrap.ts](src/lib/prBootstrap.ts)
 - Icon asset: [src/views/Icon.tsx](src/views/Icon.tsx)
 
 ## Working locally
@@ -43,9 +48,11 @@
 
 - The view assumes the record implements `setExtensionField` and `getExtensionField`, which Aha! provides for Features and Requirements.
 - `buildIssue` performs additional `aha.models.*` queries to enrich markdown. Ensure the current user has permission to read related objects.
-- GitHub authentication uses the built-in OAuth app; the scope `repo, read:org` must be granted the first time.
+- GitHub authentication uses the built-in OAuth app. Workflow mode also requests the `workflow` scope.
 - The repository string _must_ include `/`; invalid entries surface an inline error.
-- Existing assignments load from the stored extension field, so deleting the field in Aha! resets the UI.
+- Workflow mode dispatches from the repository default branch and requires `feature_reference`, `prompt`, and `pr_number` workflow inputs.
+- Configured PR labels must already exist in GitHub. They are reapplied when an open PR is reused.
+- Existing legacy issue assignments remain viewable and can be moved to a pull request.
 - TypeScript errors inside `.aha-cache` or generated view bundles can be ignored—they are artifacts of the CLI build process.
 
 ## When you update the extension
