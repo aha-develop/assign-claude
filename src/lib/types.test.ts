@@ -1,9 +1,27 @@
 import {
   assignmentForMode,
   parsePullRequestLabels,
+  repositoriesFor,
   storeAssignment,
   triggerModeFor,
 } from "./types";
+
+describe("repositoriesFor", () => {
+  it("wraps a legacy string setting in an array", () => {
+    expect(repositoriesFor("acme/app")).toEqual(["acme/app"]);
+  });
+
+  it("preserves the current array setting", () => {
+    expect(repositoriesFor(["acme/app", "acme/api"])).toEqual([
+      "acme/app",
+      "acme/api",
+    ]);
+  });
+
+  it("returns an empty array when the setting is absent", () => {
+    expect(repositoriesFor(undefined)).toEqual([]);
+  });
+});
 
 describe("triggerModeFor", () => {
   it("defaults existing installations to mention mode", () => {

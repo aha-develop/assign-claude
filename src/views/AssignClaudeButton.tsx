@@ -15,6 +15,7 @@ import {
   isPullRequestAssignment,
   MentionPullRequestAssignmentData,
   parsePullRequestLabels,
+  repositoriesFor,
   StoredClaudeData,
   storeAssignment,
   triggerModeFor,
@@ -60,7 +61,8 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
 }) => {
   const mode = triggerModeFor(settings);
   const matchingAssignment = assignmentForMode(existingAssignments, mode);
-  const hasSettings = !!settings.repository;
+  const [repository] = repositoriesFor(settings.repository);
+  const hasSettings = !!repository;
 
   const [storedAssignments, setStoredAssignments] = useState<
     StoredClaudeData | undefined
@@ -82,7 +84,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
       setMessage("Loading record details...");
 
       try {
-        const { owner, repo } = repositoryParts(settings.repository);
+        const { owner, repo } = repositoryParts(repository);
         const workflowFile = (settings.workflowFile ?? "claude.yml").trim();
         if (mode === "workflow" && !workflowFile) {
           throw new Error("Please configure the Claude workflow file.");
@@ -183,7 +185,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
         setMessage(`Error: ${errorMessage}`);
       }
     },
-    [assignment, mode, record, settings, storedAssignments],
+    [assignment, mode, record, repository, settings, storedAssignments],
   );
 
   if (status === "loading") {
@@ -271,11 +273,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
               </aha-button>
             ) : null}
             {!pullRequestAssignment ? (
-              <aha-button
-                kind="secondary"
-                size="small"
-                onClick={handleClick}
-              >
+              <aha-button kind="secondary" size="small" onClick={handleClick}>
                 Create PR <i className="fa-regular fa-code-pull-request" />
               </aha-button>
             ) : null}
@@ -347,6 +345,7 @@ const AssignToClaude = ({
   if (loading || !settings) {
     return <aha-spinner size="20px" />;
   }
+
   return (
     <AssignClaudeButton
       record={record}
