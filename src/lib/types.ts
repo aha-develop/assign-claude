@@ -18,6 +18,15 @@ export function repositoriesFor(
   return Array.isArray(repository) ? repository : [repository];
 }
 
+export function preferredRepositoryFor(
+  repositories: string[],
+  preferredRepository: string | null,
+): string | undefined {
+  return preferredRepository && repositories.includes(preferredRepository)
+    ? preferredRepository
+    : repositories[0];
+}
+
 export interface LegacyClaudeIssueData {
   issueNumber: number;
   issueUrl: string;

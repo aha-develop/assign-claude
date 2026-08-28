@@ -1,6 +1,7 @@
 import {
   assignmentForMode,
   parsePullRequestLabels,
+  preferredRepositoryFor,
   repositoriesFor,
   storeAssignment,
   triggerModeFor,
@@ -20,6 +21,18 @@ describe("repositoriesFor", () => {
 
   it("returns an empty array when the setting is absent", () => {
     expect(repositoriesFor(undefined)).toEqual([]);
+  });
+});
+
+describe("preferredRepositoryFor", () => {
+  const repositories = ["acme/app", "acme/api"];
+
+  it("uses a remembered repository that is still configured", () => {
+    expect(preferredRepositoryFor(repositories, "acme/api")).toBe("acme/api");
+  });
+
+  it("falls back to the first repository when the remembered value is stale", () => {
+    expect(preferredRepositoryFor(repositories, "other/app")).toBe("acme/app");
   });
 });
 
