@@ -15,6 +15,8 @@ import {
   isPullRequestAssignment,
   MentionPullRequestAssignmentData,
   parsePullRequestLabels,
+  preferredRepositoryFor,
+  repositoriesFor,
   StoredClaudeData,
   storeAssignment,
   triggerModeFor,
@@ -22,6 +24,9 @@ import {
 } from "../lib/types";
 import { useTeamSettings } from "../lib/useTeamSettings";
 import { Icon } from "./Icon";
+import { RepositorySelect } from "./RepositorySelect";
+
+const LAST_USED_REPOSITORY_KEY = `${EXTENSION_ID}.lastUsedRepository`;
 
 type AssignClaudeButtonProps = {
   record: RecordType;
@@ -53,6 +58,22 @@ function repositoryParts(repository: string | undefined): {
   return { owner: parts[0], repo: parts[1] };
 }
 
+function lastUsedRepository(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_USED_REPOSITORY_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberRepository(repository: string): void {
+  try {
+    window.localStorage.setItem(LAST_USED_REPOSITORY_KEY, repository);
+  } catch {
+    // The selection still works when storage is unavailable.
+  }
+}
+
 const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
   record,
   settings,
@@ -60,7 +81,16 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
 }) => {
   const mode = triggerModeFor(settings);
   const matchingAssignment = assignmentForMode(existingAssignments, mode);
-  const hasSettings = !!settings.repository;
+  const repositories = repositoriesFor(settings.repository);
+  const [rememberedRepository, setRememberedRepository] =
+    useState(lastUsedRepository);
+  const repository = preferredRepositoryFor(repositories, rememberedRepository);
+  const hasSettings = !!repository;
+
+  const handleRepositoryChange = useCallback((nextRepository: string) => {
+    setRememberedRepository(nextRepository);
+    rememberRepository(nextRepository);
+  }, []);
 
   const [storedAssignments, setStoredAssignments] = useState<
     StoredClaudeData | undefined
@@ -82,7 +112,8 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
       setMessage("Loading record details...");
 
       try {
-        const { owner, repo } = repositoryParts(settings.repository);
+        const { owner, repo } = repositoryParts(repository);
+        if (repository) rememberRepository(repository);
         const workflowFile = (settings.workflowFile ?? "claude.yml").trim();
         if (mode === "workflow" && !workflowFile) {
           throw new Error("Please configure the Claude workflow file.");
@@ -183,7 +214,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
         setMessage(`Error: ${errorMessage}`);
       }
     },
-    [assignment, mode, record, settings, storedAssignments],
+    [assignment, mode, record, repository, settings, storedAssignments],
   );
 
   if (status === "loading") {
@@ -271,11 +302,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
               </aha-button>
             ) : null}
             {!pullRequestAssignment ? (
-              <aha-button
-                kind="secondary"
-                size="small"
-                onClick={handleClick}
-              >
+              <aha-button kind="secondary" size="small" onClick={handleClick}>
                 Create PR <i className="fa-regular fa-code-pull-request" />
               </aha-button>
             ) : null}
@@ -314,7 +341,21 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
           Send to Claude <i className="fa-regular fa-arrow-right" />
         </aha-button>
       }
-      footer={`Share this ${record.typename.toLowerCase()} with Claude to begin implementation.`}
+      footer={
+        <span>
+          Share this {record.typename.toLowerCase()} with Claude to begin
+          implementation
+          {repositories.length > 1 && repository ? (
+            <RepositorySelect
+              repositories={repositories}
+              value={repository}
+              onChange={handleRepositoryChange}
+            />
+          ) : (
+            "."
+          )}
+        </span>
+      }
       alert={
         status === "error" ? (
           <aha-alert
@@ -347,6 +388,7 @@ const AssignToClaude = ({
   if (loading || !settings) {
     return <aha-spinner size="20px" />;
   }
+
   return (
     <AssignClaudeButton
       record={record}

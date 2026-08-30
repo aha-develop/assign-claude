@@ -41,6 +41,7 @@
           "description": "Format: owner/repo (e.g., myorg/myrepo)",
           "type": "string",
           "required": true,
+          "array": true,
           "scope": [
             "account",
             "team",

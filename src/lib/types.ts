@@ -1,12 +1,30 @@
 export type TriggerMode = "mention" | "workflow";
 
+export type RepositorySetting = string | string[];
+
 export interface ClaudeSettings {
-  repository?: string;
+  repository?: RepositorySetting;
   triggerMode?: string;
   workflowFile?: string;
   pullRequestLabels?: string;
   customInstructions?: string;
   claudeHandle?: string;
+}
+
+export function repositoriesFor(
+  repository: RepositorySetting | undefined,
+): string[] {
+  if (!repository) return [];
+  return Array.isArray(repository) ? repository : [repository];
+}
+
+export function preferredRepositoryFor(
+  repositories: string[],
+  preferredRepository: string | null,
+): string | undefined {
+  return preferredRepository && repositories.includes(preferredRepository)
+    ? preferredRepository
+    : repositories[0];
 }
 
 export interface LegacyClaudeIssueData {
