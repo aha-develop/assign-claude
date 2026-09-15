@@ -43,6 +43,7 @@ export interface MentionIssueAssignmentData {
 
 export interface MentionPullRequestAssignmentData {
   mode: "mention";
+  repository?: string;
   prNumber: number;
   prUrl: string;
   branch: string;
@@ -52,6 +53,7 @@ export interface MentionPullRequestAssignmentData {
 
 export interface WorkflowAssignmentData {
   mode: "workflow";
+  repository?: string;
   prNumber: number;
   prUrl: string;
   branch: string;
@@ -95,6 +97,30 @@ export function isPullRequestAssignment(
   assignment: ClaudeAssignmentData,
 ): assignment is MentionPullRequestAssignmentData | WorkflowAssignmentData {
   return "prNumber" in assignment;
+}
+
+export function repositoryForAssignment(
+  assignment: ClaudeAssignmentData,
+): string | undefined {
+  if ("repository" in assignment && assignment.repository?.trim()) {
+    return assignment.repository.trim();
+  }
+
+  const assignmentUrl = isPullRequestAssignment(assignment)
+    ? assignment.prUrl
+    : assignment.issueUrl;
+
+  try {
+    const url = new URL(assignmentUrl);
+    if (url.hostname.toLowerCase() !== "github.com") return undefined;
+
+    const [owner, repo] = url.pathname.split("/").filter(Boolean);
+    return owner && repo
+      ? `${decodeURIComponent(owner)}/${decodeURIComponent(repo)}`
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function assignmentForMode(
