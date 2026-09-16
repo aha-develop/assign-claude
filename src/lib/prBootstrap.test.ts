@@ -4,27 +4,34 @@ import {
 } from "./prBootstrap";
 
 describe("branchNameFor", () => {
-  it("creates a branch from the Aha! reference", () => {
-    expect(branchNameFor("DEVOPS-3608")).toBe("DEVOPS-3608");
+  it("creates a branch from the Aha! reference and name", () => {
+    expect(
+      branchNameFor(
+        "DEVOPS-3705",
+        "Update Claude branch naming to match aha-dev-cli",
+      ),
+    ).toBe("DEVOPS-3705-update-claude-branch-naming-match-aha-dev-cli");
   });
 
-  it("removes characters that are unsafe in git refs", () => {
-    expect(branchNameFor("A B/c~d")).toBe("A-B-c-d");
+  it("normalizes punctuation and removes stop words", () => {
+    expect(branchNameFor("DEV-1", "Add a link to Aha!, now")).toBe(
+      "DEV-1-add-link-aha-now",
+    );
   });
 
-  it("falls back when the reference has no usable characters", () => {
-    expect(branchNameFor("///")).toBe("claude-work");
+  it("limits branch names to 80 characters", () => {
+    expect(branchNameFor("DEV-1", "a".repeat(100))).toHaveLength(80);
   });
 });
 
 describe("branchCandidatesFor", () => {
   it("provides bounded suffixes for stale branches", () => {
-    expect(branchCandidatesFor("DEV-1")).toEqual([
-      "DEV-1",
-      "DEV-1-2",
-      "DEV-1-3",
-      "DEV-1-4",
-      "DEV-1-5",
+    expect(branchCandidatesFor("DEV-1", "Do the work")).toEqual([
+      "DEV-1-work",
+      "DEV-1-work-2",
+      "DEV-1-work-3",
+      "DEV-1-work-4",
+      "DEV-1-work-5",
     ]);
   });
 });

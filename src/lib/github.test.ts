@@ -73,7 +73,7 @@ describe("bootstrapPullRequest", () => {
       baseRefRoute,
       {
         method: "GET",
-        path: "/repos/acme/app/git/ref/heads/DEV-42",
+        path: "/repos/acme/app/git/ref/heads/DEV-42-work",
         body: { object: { sha: "work-sha" } },
       },
       {
@@ -98,13 +98,14 @@ describe("bootstrapPullRequest", () => {
         owner: "acme",
         repo: "app",
         referenceNum: "DEV-42",
+        name: "Do the work",
         title: "DEV-42: Do the work",
         body: "Task details",
         labels: ["needs-review", "team-platform"],
       }),
     ).resolves.toEqual({
       baseBranch: "master",
-      branch: "DEV-42",
+      branch: "DEV-42-work",
       prNumber: 42,
       prUrl: "https://github.com/acme/app/pull/42",
     });
@@ -122,7 +123,7 @@ describe("bootstrapPullRequest", () => {
       baseRefRoute,
       {
         method: "GET",
-        path: "/repos/acme/app/git/ref/heads/DEV-42",
+        path: "/repos/acme/app/git/ref/heads/DEV-42-work",
         status: 404,
         body: { message: "Not Found" },
       },
@@ -158,6 +159,7 @@ describe("bootstrapPullRequest", () => {
       owner: "acme",
       repo: "app",
       referenceNum: "DEV-42",
+      name: "Do the work",
       title: "DEV-42: Do the work",
       body: "Task details",
       labels: [],
@@ -171,7 +173,7 @@ describe("bootstrapPullRequest", () => {
     });
     expect(calls.find(({ path }) => path.endsWith("/pulls"))?.body).toMatchObject(
       {
-        head: "DEV-42",
+        head: "DEV-42-work",
         base: "master",
         draft: true,
       },

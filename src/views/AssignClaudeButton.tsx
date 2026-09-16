@@ -136,6 +136,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
           owner,
           repo,
           referenceNum: model.referenceNum,
+          name: model.name,
           title,
           body,
           labels: parsePullRequestLabels(settings.pullRequestLabels),
