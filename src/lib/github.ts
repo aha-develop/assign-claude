@@ -210,12 +210,13 @@ export async function bootstrapPullRequest(
     owner: string;
     repo: string;
     referenceNum: string;
+    name: string;
     title: string;
     body: string;
     labels: string[];
   },
 ): Promise<PullRequestBootstrap> {
-  const { owner, repo, referenceNum, title, body, labels } = options;
+  const { owner, repo, referenceNum, name, title, body, labels } = options;
   const repoInfo = await restRequest<{ default_branch: string }>(
     token,
     "GET",
@@ -228,7 +229,7 @@ export async function bootstrapPullRequest(
     `/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`,
   );
   const baseSha = baseRef.object.sha;
-  const candidates = branchCandidatesFor(referenceNum);
+  const candidates = branchCandidatesFor(referenceNum, name);
 
   for (const branch of candidates) {
     const branchRef = await findRef(token, owner, repo, branch);

@@ -39,9 +39,9 @@ Copy the [minimal public workflow template](examples/claude.yml) to
 project-specific setup and test steps.
 
 Workflow mode discovers the repository's default branch, creates a
-`<reference>` branch with an empty commit, and opens a draft pull request
-from it against the default branch. It then dispatches the configured workflow
-from the default branch with these inputs:
+`<reference>-<record-name>` branch with an empty commit, and opens a draft pull
+request from it against the default branch. It then dispatches the configured
+workflow from the default branch with these inputs:
 
 ```yaml
 on:
