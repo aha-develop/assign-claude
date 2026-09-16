@@ -2,6 +2,7 @@ import {
   assignmentForMode,
   parsePullRequestLabels,
   preferredRepositoryFor,
+  repositoryForAssignment,
   repositoriesFor,
   storeAssignment,
   triggerModeFor,
@@ -43,6 +44,35 @@ describe("triggerModeFor", () => {
 
   it("accepts workflow mode", () => {
     expect(triggerModeFor({ triggerMode: "workflow" })).toBe("workflow");
+  });
+});
+
+describe("repositoryForAssignment", () => {
+  it("uses a repository stored on newer assignments", () => {
+    expect(
+      repositoryForAssignment({
+        mode: "mention",
+        repository: " acme/api ",
+        prNumber: 43,
+        prUrl: "https://github.com/acme/app/pull/43",
+        branch: "DEV-43",
+        assignedAt: "2026-08-11T00:00:00.000Z",
+        lastTriggeredAt: "2026-08-11T00:00:00.000Z",
+      }),
+    ).toBe("acme/api");
+  });
+
+  it("infers the repository from older pull request assignments", () => {
+    expect(
+      repositoryForAssignment({
+        mode: "workflow",
+        prNumber: 42,
+        prUrl: "https://github.com/acme/app/pull/42",
+        branch: "DEV-42",
+        assignedAt: "2026-08-11T00:00:00.000Z",
+        lastTriggeredAt: "2026-08-11T00:00:00.000Z",
+      }),
+    ).toBe("acme/app");
   });
 });
 

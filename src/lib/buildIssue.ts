@@ -194,6 +194,9 @@ export async function buildIssue({
       ? await describeFeature(record)
       : await describeRequirement(record);
 
+  const title = `${model.referenceNum}: ${model.name}`;
+  body = `# ${title}\n\n${body}`;
+
   if (attachments.length > 0) {
     body += `\n\n### Attachments\n`;
     attachments.forEach((att) => {
@@ -212,8 +215,6 @@ export async function buildIssue({
 ${customInstructions}
 `;
   }
-
-  const title = `${model.referenceNum}: ${model.name}`;
 
   return {
     title,

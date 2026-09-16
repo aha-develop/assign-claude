@@ -16,6 +16,7 @@ import {
   MentionPullRequestAssignmentData,
   parsePullRequestLabels,
   preferredRepositoryFor,
+  repositoryForAssignment,
   repositoriesFor,
   StoredClaudeData,
   storeAssignment,
@@ -112,8 +113,11 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
       setMessage("Loading record details...");
 
       try {
-        const { owner, repo } = repositoryParts(repository);
-        if (repository) rememberRepository(repository);
+        const targetRepository = assignment
+          ? repositoryForAssignment(assignment) ?? repository
+          : repository;
+        const { owner, repo } = repositoryParts(targetRepository);
+        if (targetRepository) rememberRepository(targetRepository);
         const workflowFile = (settings.workflowFile ?? "claude.yml").trim();
         if (mode === "workflow" && !workflowFile) {
           throw new Error("Please configure the Claude workflow file.");
@@ -145,6 +149,7 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
             ? assignment
             : undefined;
         const commonAssignment = {
+          repository: `${owner}/${repo}`,
           prNumber: bootstrap.prNumber,
           prUrl: bootstrap.prUrl,
           branch: bootstrap.branch,
@@ -301,11 +306,15 @@ const AssignClaudeButton: React.FC<AssignClaudeButtonProps> = ({
                 View run <i className="fa-regular fa-arrow-up-right" />
               </aha-button>
             ) : null}
-            {!pullRequestAssignment ? (
+            {pullRequestAssignment ? (
+              <aha-button kind="secondary" size="small" onClick={handleClick}>
+                Run again <i className="fa-regular fa-rotate-right" />
+              </aha-button>
+            ) : (
               <aha-button kind="secondary" size="small" onClick={handleClick}>
                 Create PR <i className="fa-regular fa-code-pull-request" />
               </aha-button>
-            ) : null}
+            )}
           </span>
         }
         footer={
