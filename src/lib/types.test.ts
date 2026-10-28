@@ -1,5 +1,7 @@
 import {
+  authenticationFor,
   assignmentForMode,
+  isPullRequestAssignment,
   parsePullRequestLabels,
   preferredRepositoryFor,
   repositoryForAssignment,
@@ -7,6 +9,32 @@ import {
   storeAssignment,
   triggerModeFor,
 } from "./types";
+
+describe("authentication settings", () => {
+  it("keeps OAuth as the installed default without requiring an App key", () => {
+    const settings =
+      require("../../package.json").ahaExtension.contributes.settings;
+    expect(
+      authenticationFor({ githubAppId: settings.githubAppId.default }),
+    ).toBe("oauth");
+    expect(triggerModeFor({ triggerMode: settings.triggerMode.default })).toBe(
+      "mention",
+    );
+    expect(settings.githubAppPrivateKey.required).not.toBe(true);
+    expect(settings.repository.scope).toContain("user");
+  });
+
+  it("defaults to OAuth mention mode without App configuration", () => {
+    expect(authenticationFor({})).toBe("oauth");
+    expect(authenticationFor({ githubAppId: "  " })).toBe("oauth");
+    expect(triggerModeFor({})).toBe("mention");
+    expect(triggerModeFor({ triggerMode: "workflow" })).toBe("workflow");
+  });
+
+  it("selects App authentication when its ID is configured, without reading a browser secret", () => {
+    expect(authenticationFor({ githubAppId: "123456" })).toBe("app");
+  });
+});
 
 describe("repositoriesFor", () => {
   it("wraps a legacy string setting in an array", () => {
@@ -34,16 +62,6 @@ describe("preferredRepositoryFor", () => {
 
   it("falls back to the first repository when the remembered value is stale", () => {
     expect(preferredRepositoryFor(repositories, "other/app")).toBe("acme/app");
-  });
-});
-
-describe("triggerModeFor", () => {
-  it("defaults existing installations to mention mode", () => {
-    expect(triggerModeFor({ repository: "acme/app" })).toBe("mention");
-  });
-
-  it("accepts workflow mode", () => {
-    expect(triggerModeFor({ triggerMode: "workflow" })).toBe("workflow");
   });
 });
 
@@ -91,6 +109,35 @@ describe("stored assignments", () => {
     assignedAt: "2026-08-01T00:00:00.000Z",
   };
 
+  it("keeps OAuth and App workflow assignments separate when switching authentication", () => {
+    const oauth = {
+      mode: "workflow" as const,
+      prNumber: 42,
+      prUrl: "https://github.com/acme/app/pull/42",
+      branch: "oauth-work",
+      assignedAt: "2026-08-11T00:00:00.000Z",
+      lastTriggeredAt: "2026-08-11T00:00:00.000Z",
+    };
+    const app = {
+      ...oauth,
+      branch: "app-work",
+      prNumber: undefined,
+      prUrl: undefined,
+    };
+    const stored = storeAssignment(
+      storeAssignment(undefined, oauth),
+      app,
+      "app",
+    );
+    expect(assignmentForMode(stored, "workflow")).toEqual(oauth);
+    expect(assignmentForMode(stored, "workflow", "app")).toEqual(app);
+    const updated = storeAssignment(stored, { ...oauth, workflowRunId: 5 });
+    expect(assignmentForMode(updated, "workflow", "app")).toEqual(app);
+    expect(assignmentForMode(updated, "workflow")).toMatchObject({
+      branch: "oauth-work",
+    });
+  });
+
   it("reads a legacy assignment as mention mode", () => {
     expect(assignmentForMode(legacy, "mention")).toEqual(legacy);
     expect(assignmentForMode(legacy, "workflow")).toBeUndefined();
@@ -132,5 +179,34 @@ describe("stored assignments", () => {
       mode: "mention",
       prNumber: 43,
     });
+  });
+
+  it("stores a workflow assignment before its PR exists", () => {
+    const assignment = {
+      mode: "workflow" as const,
+      repository: "acme/app",
+      branch: "DEV-42",
+      assignedAt: "2026-08-11T00:00:00.000Z",
+      lastTriggeredAt: "2026-08-11T00:00:00.000Z",
+      workflowRunId: 1234,
+    };
+    const stored = storeAssignment(undefined, assignment);
+    expect(assignmentForMode(stored, "workflow")).toEqual(assignment);
+    expect(isPullRequestAssignment(assignment)).toBe(false);
+    expect(repositoryForAssignment(assignment)).toBe("acme/app");
+  });
+
+  it("preserves a single legacy mention PR when switching to workflows", () => {
+    const mention = {
+      mode: "mention" as const,
+      prNumber: 43,
+      prUrl: "https://github.com/acme/app/pull/43",
+      branch: "DEV-43",
+      assignedAt: "2026-08-11T00:00:00.000Z",
+      lastTriggeredAt: "2026-08-11T00:00:00.000Z",
+    };
+    const stored = storeAssignment(mention, { ...mention, mode: "workflow" });
+    expect(stored.mention).toEqual(mention);
+    expect(stored.workflow?.prNumber).toBe(43);
   });
 });
