@@ -1,3 +1,5 @@
+import * as z from "zod/mini";
+
 export type TriggerMode = "mention" | "workflow";
 export type GitHubAuthentication = "oauth" | "app";
 
@@ -64,19 +66,21 @@ export interface MentionPullRequestAssignmentData {
   lastTriggeredAt: string;
 }
 
-export interface WorkflowAssignmentData {
-  mode: "workflow";
-  repository?: string;
-  prNumber?: number;
-  prUrl?: string;
-  branch: string;
-  assignedAt: string;
-  lastTriggeredAt: string;
-  workflowRunId?: number;
-  workflowRunUrl?: string;
-  workflowStatus?: string;
-  workflowConclusion?: string | null;
-}
+export const WorkflowAssignmentSchema = z.object({
+  mode: z.literal("workflow"),
+  repository: z.optional(z.string()),
+  prNumber: z.optional(z.number()),
+  prUrl: z.optional(z.string()),
+  branch: z.string(),
+  assignedAt: z.string(),
+  lastTriggeredAt: z.string(),
+  workflowRunId: z.optional(z.number()),
+  workflowRunUrl: z.optional(z.string()),
+  workflowStatus: z.optional(z.string()),
+  workflowConclusion: z.optional(z.nullable(z.string())),
+});
+
+export type WorkflowAssignmentData = z.infer<typeof WorkflowAssignmentSchema>;
 
 export type ClaudeAssignmentData =
   | LegacyClaudeIssueData

@@ -1,3 +1,4 @@
+import * as z from "zod/mini";
 import { EXTENSION_ID, FIELD_NAME } from "./constants";
 import {
   bootstrapBranch,
@@ -16,32 +17,44 @@ import {
   StoredClaudeData,
   storeAssignment,
   WorkflowAssignmentData,
+  WorkflowAssignmentSchema,
 } from "./types";
 
-export interface AssignWorkRequest {
-  action: "assign" | "refresh";
-  record: { id: string; typename: "Feature" | "Requirement" };
-  repository?: string;
-  task?: { title: string; body: string; referenceNum: string; name: string };
-}
+const recordSchema = z.object({
+  id: z.string().check(z.minLength(1)),
+  typename: z.enum(["Feature", "Requirement"]),
+});
 
-export interface AssignWorkResult {
-  assignment: WorkflowAssignmentData;
-}
+export const AssignWorkRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("assign"),
+    record: recordSchema,
+    repository: z.optional(z.string()),
+    task: z.object({
+      title: z.string().check(z.minLength(1)),
+      body: z.string().check(z.minLength(1)),
+      referenceNum: z.string().check(z.minLength(1)),
+      name: z.string().check(z.minLength(1)),
+    }),
+  }),
+  z.object({
+    action: z.literal("refresh"),
+    record: recordSchema,
+    repository: z.optional(z.string()),
+  }),
+]);
+
+export const AssignWorkResultSchema = z.object({
+  assignment: WorkflowAssignmentSchema,
+});
+
+export type AssignWorkRequest = z.infer<typeof AssignWorkRequestSchema>;
+export type AssignWorkResult = z.infer<typeof AssignWorkResultSchema>;
 
 export async function assignWork(
   args: AssignWorkRequest,
   context: Aha.Context,
 ): Promise<AssignWorkResult> {
-  if (
-    !args.record?.id ||
-    !["Feature", "Requirement"].includes(args.record.typename) ||
-    !["assign", "refresh"].includes(args.action)
-  ) {
-    throw new Error(
-      "A feature or requirement and a valid action are required.",
-    );
-  }
   const modelClass = aha.models[args.record.typename] as unknown as {
     select(...fields: string[]): {
       find(id: string): Promise<Aha.HasExtensionFields & { teamId: string }>;
@@ -116,17 +129,6 @@ export async function assignWork(
     throw new Error(
       "Claude already has a workflow running for this record. View the run or refresh its status.",
     );
-  }
-  if (
-    !args.task ||
-    ![
-      args.task.title,
-      args.task.body,
-      args.task.referenceNum,
-      args.task.name,
-    ].every((value) => typeof value === "string" && value.length > 0)
-  ) {
-    throw new Error("The record's task details are required.");
   }
   const workflowFile = (settings.workflowFile ?? "claude.yml").trim();
   if (!workflowFile) throw new Error("Configure the Claude workflow file.");
