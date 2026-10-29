@@ -1,4 +1,7 @@
+import * as z from "zod/mini";
+
 export type TriggerMode = "mention" | "workflow";
+export type GitHubAuthentication = "oauth" | "app";
 
 export type RepositorySetting = string | string[];
 
@@ -9,6 +12,18 @@ export interface ClaudeSettings {
   pullRequestLabels?: string;
   customInstructions?: string;
   claudeHandle?: string;
+  githubAppId?: string;
+  githubAppPrivateKey?: string;
+}
+
+export function authenticationFor(
+  settings: ClaudeSettings,
+): GitHubAuthentication {
+  return settings.githubAppId?.trim() ? "app" : "oauth";
+}
+
+export function triggerModeFor(settings: ClaudeSettings): TriggerMode {
+  return settings.triggerMode === "workflow" ? "workflow" : "mention";
 }
 
 export function repositoriesFor(
@@ -51,17 +66,21 @@ export interface MentionPullRequestAssignmentData {
   lastTriggeredAt: string;
 }
 
-export interface WorkflowAssignmentData {
-  mode: "workflow";
-  repository?: string;
-  prNumber: number;
-  prUrl: string;
-  branch: string;
-  assignedAt: string;
-  lastTriggeredAt: string;
-  workflowRunId?: number;
-  workflowRunUrl?: string;
-}
+export const WorkflowAssignmentSchema = z.object({
+  mode: z.literal("workflow"),
+  repository: z.optional(z.string()),
+  prNumber: z.optional(z.number()),
+  prUrl: z.optional(z.string()),
+  branch: z.string(),
+  assignedAt: z.string(),
+  lastTriggeredAt: z.string(),
+  workflowRunId: z.optional(z.number()),
+  workflowRunUrl: z.optional(z.string()),
+  workflowStatus: z.optional(z.string()),
+  workflowConclusion: z.optional(z.nullable(z.string())),
+});
+
+export type WorkflowAssignmentData = z.infer<typeof WorkflowAssignmentSchema>;
 
 export type ClaudeAssignmentData =
   | LegacyClaudeIssueData
@@ -73,6 +92,7 @@ export interface StoredClaudeAssignments {
   version: 2;
   mention?: MentionIssueAssignmentData | MentionPullRequestAssignmentData;
   workflow?: WorkflowAssignmentData;
+  githubApp?: WorkflowAssignmentData;
 }
 
 export type StoredClaudeData = ClaudeAssignmentData | StoredClaudeAssignments;
@@ -83,20 +103,27 @@ function isStoredClaudeAssignments(
   return "version" in stored && stored.version === 2;
 }
 
-export function triggerModeFor(settings: ClaudeSettings): TriggerMode {
-  return settings.triggerMode === "workflow" ? "workflow" : "mention";
-}
-
-export function assignmentMode(
-  assignment: ClaudeAssignmentData,
-): TriggerMode {
+export function assignmentMode(assignment: ClaudeAssignmentData): TriggerMode {
   return assignment.mode === "workflow" ? "workflow" : "mention";
 }
 
 export function isPullRequestAssignment(
   assignment: ClaudeAssignmentData,
-): assignment is MentionPullRequestAssignmentData | WorkflowAssignmentData {
-  return "prNumber" in assignment;
+): assignment is
+  | MentionPullRequestAssignmentData
+  | (WorkflowAssignmentData & {
+      prNumber: number;
+      prUrl: string;
+    }) {
+  return (
+    "prNumber" in assignment && !!assignment.prNumber && !!assignment.prUrl
+  );
+}
+
+export function isWorkflowAssignment(
+  assignment: ClaudeAssignmentData,
+): assignment is WorkflowAssignmentData {
+  return "branch" in assignment && assignment.mode === "workflow";
 }
 
 export function repositoryForAssignment(
@@ -108,15 +135,17 @@ export function repositoryForAssignment(
 
   const assignmentUrl = isPullRequestAssignment(assignment)
     ? assignment.prUrl
-    : assignment.issueUrl;
+    : "issueUrl" in assignment
+      ? assignment.issueUrl
+      : "";
 
   try {
-    const url = new URL(assignmentUrl);
-    if (url.hostname.toLowerCase() !== "github.com") return undefined;
-
-    const [owner, repo] = url.pathname.split("/").filter(Boolean);
-    return owner && repo
-      ? `${decodeURIComponent(owner)}/${decodeURIComponent(repo)}`
+    // Also runs on Aha!'s server, which does not provide the browser URL API.
+    const match = assignmentUrl.match(
+      /^https?:\/\/github\.com\/([^/?#]+)\/([^/?#]+)\//i,
+    );
+    return match
+      ? `${decodeURIComponent(match[1])}/${decodeURIComponent(match[2])}`
       : undefined;
   } catch {
     return undefined;
@@ -126,17 +155,22 @@ export function repositoryForAssignment(
 export function assignmentForMode(
   stored: StoredClaudeData | undefined,
   mode: TriggerMode,
+  authentication: GitHubAuthentication = "oauth",
 ): ClaudeAssignmentData | undefined {
   if (!stored) return undefined;
   if (isStoredClaudeAssignments(stored)) {
+    if (authentication === "app")
+      return mode === "workflow" ? stored.githubApp : undefined;
     return stored[mode];
   }
+  if (authentication === "app") return undefined;
   return assignmentMode(stored) === mode ? stored : undefined;
 }
 
 export function storeAssignment(
   stored: StoredClaudeData | undefined,
   assignment: MentionPullRequestAssignmentData | WorkflowAssignmentData,
+  authentication: GitHubAuthentication = "oauth",
 ): StoredClaudeAssignments {
   let current: StoredClaudeAssignments;
   if (stored && isStoredClaudeAssignments(stored)) {
@@ -152,9 +186,20 @@ export function storeAssignment(
         issueUrl: previousAssignment.issueUrl,
         assignedAt: previousAssignment.assignedAt,
       };
+    } else if (
+      previousAssignment &&
+      "branch" in previousAssignment &&
+      previousAssignment.mode === "mention"
+    ) {
+      current.mention = previousAssignment;
+    } else if (previousAssignment && isWorkflowAssignment(previousAssignment)) {
+      current.workflow = previousAssignment;
     }
   }
 
+  if (authentication === "app" && isWorkflowAssignment(assignment)) {
+    return { ...current, githubApp: assignment };
+  }
   if (assignment.mode === "mention") {
     return { ...current, mention: assignment };
   }

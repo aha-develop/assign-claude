@@ -1,4 +1,5 @@
 name: Claude Code from Aha!
+run-name: "${{ inputs.feature_reference }}: ${{ inputs.title }}"
 
 on:
   workflow_dispatch:
@@ -11,38 +12,133 @@ on:
         description: Task for Claude to implement
         required: true
         type: string
+      branch:
+        description: Work branch created by the extension
+        required: false
+        type: string
+      base_branch:
+        description: Pull request base branch
+        required: false
+        type: string
+      title:
+        description: Pull request title
+        required: false
+        type: string
+      labels:
+        description: JSON array of pull request labels
+        required: false
+        default: "[]"
+        type: string
       pr_number:
-        description: Existing draft pull request to update
-        required: true
+        description: Existing draft PR for OAuth dispatches
+        required: false
         type: string
 
 permissions:
   contents: write
   pull-requests: write
-  issues: write
-  id-token: write
+
+concurrency:
+  group: claude-${{ inputs.branch || inputs.pr_number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   claude:
     runs-on: ubuntu-latest
+    # Installation tokens expire after an hour.
+    timeout-minutes: ${{ inputs.branch != '' && 50 || 360 }}
     steps:
-      - uses: actions/checkout@v6
+      - name: Validate dispatch inputs
+        env:
+          BRANCH: ${{ inputs.branch }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          PR_TITLE: ${{ inputs.title }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          if [ -n "$BRANCH" ]; then
+            test -n "$BASE_BRANCH"
+            test -n "$PR_TITLE"
+            test -z "$PR_NUMBER"
+          else
+            test -n "$PR_NUMBER"
+          fi
 
-      - name: Check out the pull request branch
+      - name: Authenticate as the GitHub App
+        if: inputs.branch != ''
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.CLAUDE_APP_ID }}
+          private-key: ${{ secrets.CLAUDE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token || github.token }}
+
+      - name: Check out the existing PR for OAuth dispatches
+        if: inputs.pr_number != ''
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ inputs.pr_number }}
         run: gh pr checkout "$PR_NUMBER"
 
       - name: Run Claude Code
+        id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          CLAUDE_BRANCH: ${{ inputs.branch }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.app-token.outputs.token || github.token }}
+          allowed_bots: ${{ steps.app-token.outputs.app-slug && format('{0}[bot]', steps.app-token.outputs.app-slug) || '' }}
+          base_branch: ${{ inputs.base_branch }}
           prompt: |
             ${{ inputs.prompt }}
 
-            You are working on existing draft pull request #${{ inputs.pr_number }}.
-            Its branch is already checked out. Commit and push your changes to
-            the current branch, prefix commit messages with
-            "${{ inputs.feature_reference }}", and mark the pull request ready
-            for review when finished. Do not create another branch or pull request.
+            ${{ inputs.branch != '' && 'Implement the task on the branch that is already checked out. Run the relevant tests. Leave your changes in the working tree; the workflow will commit, push, and open a draft pull request.' || format('Work on existing draft pull request #{0}, whose branch is already checked out. Implement and test the task, commit and push changes to this branch, and update the PR description. Prefix commit messages with {1}.', inputs.pr_number, inputs.feature_reference) }}
+
+            Do not create another branch or pull request, merge anything,
+            or mark an existing pull request ready for review.
+
+      - name: Commit changes and open a draft pull request
+        if: inputs.branch != '' && steps.claude.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          BRANCH: ${{ inputs.branch }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          FEATURE_REFERENCE: ${{ inputs.feature_reference }}
+          PR_TITLE: ${{ inputs.title }}
+          PR_BODY: ${{ inputs.prompt }}
+          PR_LABELS: ${{ inputs.labels }}
+        run: |
+          git check-ref-format --branch "$BRANCH"
+          test "$(git branch --show-current)" = "$BRANCH"
+          BOT_ID=$(gh api "users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${BOT_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "$FEATURE_REFERENCE Implement task with Claude"
+          fi
+          if git diff --quiet "origin/$BASE_BRANCH...HEAD" --; then
+            echo "No code changes; no pull request to create." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git push origin "HEAD:refs/heads/$BRANCH"
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/claude-pr-body.md"
+          if [ -z "$PR_NUMBER" ]; then
+            gh pr create --draft --head "$BRANCH" --base "$BASE_BRANCH" \
+              --title "$PR_TITLE" --body-file "$RUNNER_TEMP/claude-pr-body.md"
+            PR_NUMBER=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          fi
+          if [ "$(jq 'length' <<< "$PR_LABELS")" -gt 0 ]; then
+            jq -n --argjson labels "$PR_LABELS" '{labels: $labels}' | \
+              gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels" --method POST --input -
+          fi
+          gh pr view "$PR_NUMBER" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"

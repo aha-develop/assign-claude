@@ -2,23 +2,28 @@ import { GITHUB_API } from "./constants";
 import { branchCandidatesFor } from "./prBootstrap";
 import { TriggerMode } from "./types";
 
-interface CommentResponse {
-  id: number;
-}
-
 interface GitRef {
   object: { sha: string };
 }
 
-interface GitPullRequest {
+export interface GitPullRequest {
   html_url: string;
   number: number;
+  base?: { ref: string };
 }
 
 interface GitHubWorkflowDispatch {
   workflow_run_id: number;
   run_url: string;
   html_url: string;
+}
+
+export interface BranchBootstrap {
+  defaultBranch: string;
+  baseBranch: string;
+  branch: string;
+  prNumber?: number;
+  prUrl?: string;
 }
 
 export interface PullRequestBootstrap {
@@ -54,12 +59,15 @@ function describeError(
   if (status === 404 && endpoint.includes("/actions/workflows/")) {
     return `${base} - check that the workflow file exists on the repository's default branch and declares "on: workflow_dispatch".`;
   }
+  if (status === 404 && endpoint.endsWith("/installation")) {
+    return `${base} - install the configured GitHub App on this repository.`;
+  }
   if (
     status === 422 &&
     endpoint.includes("/actions/workflows/") &&
     endpoint.endsWith("/dispatches")
   ) {
-    return `${base} - check that feature_reference, prompt, and pr_number are declared as workflow_dispatch inputs.`;
+    return `${base} - check the workflow inputs: OAuth dispatch requires feature_reference, prompt, and pr_number; App dispatch requires feature_reference, prompt, branch, base_branch, title, and labels.`;
   }
   if (status === 422 && endpoint.endsWith("/labels")) {
     return `${base} - check that every configured pull request label exists in the repository.`;
@@ -77,7 +85,20 @@ export async function getGitHubToken(mode: TriggerMode): Promise<string> {
   return authData.token;
 }
 
-async function restRequest<T>(
+export async function commentOnPullRequest(
+  token: string,
+  options: { owner: string; repo: string; prNumber: number; comment: string },
+): Promise<void> {
+  const { owner, repo, prNumber, comment } = options;
+  await restRequest(
+    token,
+    "POST",
+    `/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+    { body: comment },
+  );
+}
+
+export async function restRequest<T>(
   token: string,
   method: string,
   endpoint: string,
@@ -106,24 +127,6 @@ async function restRequest<T>(
   return data as T;
 }
 
-export async function commentOnPullRequest(
-  token: string,
-  options: {
-    owner: string;
-    repo: string;
-    prNumber: number;
-    comment: string;
-  },
-): Promise<void> {
-  const { owner, repo, prNumber, comment } = options;
-  await restRequest<CommentResponse>(
-    token,
-    "POST",
-    `/repos/${owner}/${repo}/issues/${prNumber}/comments`,
-    { body: comment },
-  );
-}
-
 async function findRef(
   token: string,
   owner: string,
@@ -144,7 +147,7 @@ async function findRef(
   }
 }
 
-async function findOpenPullRequest(
+export async function findOpenPullRequest(
   token: string,
   owner: string,
   repo: string,
@@ -158,7 +161,7 @@ async function findOpenPullRequest(
   const pulls = await restRequest<GitPullRequest[]>(
     token,
     "GET",
-    `/repos/${owner}/${repo}/pulls?${query.toString()}`,
+    `/repos/${owner}/${repo}/pulls?${query}`,
   );
   return pulls[0] ?? null;
 }
@@ -298,6 +301,91 @@ export async function bootstrapPullRequest(
   );
 }
 
+export async function bootstrapBranch(
+  token: string,
+  options: {
+    owner: string;
+    repo: string;
+    referenceNum: string;
+    name: string;
+    previousBranch?: string;
+  },
+): Promise<BranchBootstrap> {
+  const { owner, repo, referenceNum, name, previousBranch } = options;
+  const repoInfo = await restRequest<{ default_branch: string }>(
+    token,
+    "GET",
+    `/repos/${owner}/${repo}`,
+  );
+  const baseBranch = repoInfo.default_branch;
+  const baseRef = await restRequest<GitRef>(
+    token,
+    "GET",
+    `/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`,
+  );
+  const baseSha = baseRef.object.sha;
+  const candidates = Array.from(
+    new Set([
+      ...(previousBranch ? [previousBranch] : []),
+      ...branchCandidatesFor(referenceNum, name),
+    ]),
+  );
+
+  for (const branch of candidates) {
+    const branchRef = await findRef(token, owner, repo, branch);
+    if (branchRef) {
+      const existingPr = await findOpenPullRequest(token, owner, repo, branch);
+      if (existingPr) {
+        return {
+          defaultBranch: baseBranch,
+          baseBranch: existingPr.base?.ref ?? baseBranch,
+          branch,
+          prNumber: existingPr.number,
+          prUrl: existingPr.html_url,
+        };
+      }
+      const query = new URLSearchParams({
+        state: "closed",
+        head: `${owner}:${branch}`,
+        per_page: "1",
+      });
+      const pulls = await restRequest<GitPullRequest[]>(
+        token,
+        "GET",
+        `/repos/${owner}/${repo}/pulls?${query}`,
+      );
+      if (pulls.length > 0) continue;
+      // A saved branch belongs to this assignment even if a failed run pushed
+      // changes before it could open a PR. Never reset those changes on retry.
+      if (branchRef.object.sha === baseSha || branch === previousBranch) {
+        return { defaultBranch: baseBranch, baseBranch, branch };
+      }
+      continue;
+    }
+
+    try {
+      await restRequest(token, "POST", `/repos/${owner}/${repo}/git/refs`, {
+        ref: `refs/heads/${branch}`,
+        sha: baseSha,
+      });
+    } catch (error) {
+      // Another click may have created the same branch in the meantime.
+      if (!(error instanceof GitHubRequestError && error.status === 422))
+        throw error;
+      const createdRef = await findRef(token, owner, repo, branch);
+      if (!createdRef) throw error;
+      if (createdRef.object.sha !== baseSha) continue;
+    }
+    return { defaultBranch: baseBranch, baseBranch, branch };
+  }
+
+  throw new Error(
+    `${candidates[0]} and ${
+      candidates.length - 1
+    } suffixed variants are already used by other work. Delete the stale branches in ${owner}/${repo} and try again.`,
+  );
+}
+
 export async function dispatchClaudeWorkflow(
   token: string,
   options: {
@@ -307,11 +395,17 @@ export async function dispatchClaudeWorkflow(
     ref: string;
     referenceNum: string;
     prompt: string;
-    prNumber: number;
-  },
+  } & (
+    | { prNumber: number }
+    | {
+        branch: string;
+        baseBranch: string;
+        title: string;
+        labels: string[];
+      }
+  ),
 ): Promise<WorkflowDispatch> {
-  const { owner, repo, workflowFile, ref, referenceNum, prompt, prNumber } =
-    options;
+  const { owner, repo, workflowFile, ref, referenceNum, prompt } = options;
   const dispatch = await restRequest<GitHubWorkflowDispatch>(
     token,
     "POST",
@@ -324,7 +418,14 @@ export async function dispatchClaudeWorkflow(
       inputs: {
         feature_reference: referenceNum,
         prompt,
-        pr_number: String(prNumber),
+        ...("prNumber" in options
+          ? { pr_number: String(options.prNumber) }
+          : {
+              branch: options.branch,
+              base_branch: options.baseBranch,
+              title: options.title,
+              labels: JSON.stringify(options.labels),
+            }),
       },
     },
   );
@@ -333,4 +434,22 @@ export async function dispatchClaudeWorkflow(
     runUrl: dispatch.run_url,
     htmlUrl: dispatch.html_url,
   };
+}
+
+export interface WorkflowRun {
+  status: string;
+  conclusion: string | null;
+}
+
+export async function getWorkflowRun(
+  token: string,
+  owner: string,
+  repo: string,
+  runId: number,
+): Promise<WorkflowRun> {
+  return restRequest(
+    token,
+    "GET",
+    `/repos/${owner}/${repo}/actions/runs/${runId}`,
+  );
 }
