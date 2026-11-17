@@ -1,3 +1,5 @@
+import { describePrototypes } from "./prototypes";
+
 type FetchedFeature = Aha.Feature & {
   referenceNum: string;
   name: string;
@@ -55,6 +57,7 @@ async function describeFeature(record: {
 }): Promise<{
   body: string;
   attachments: RecordAttachment[];
+  descriptions: Array<string | undefined>;
   model: FetchedFeature;
 }> {
   const feature = await aha.models.Feature.select(
@@ -101,6 +104,7 @@ ${feature.tasks && feature.tasks.length > 0 ? "### Todos\n" : ""}${feature.tasks
   return {
     body,
     attachments: feature.description?.attachments ?? [],
+    descriptions: [feature.description?.markdownBody],
     model: feature,
   };
 }
@@ -111,6 +115,7 @@ async function describeRequirement(record: {
 }): Promise<{
   body: string;
   attachments: RecordAttachment[];
+  descriptions: Array<string | undefined>;
   model: FetchedRequirement;
 }> {
   const requirement: FetchedRequirement = await aha.models.Requirement.select(
@@ -163,6 +168,10 @@ ${
       ...(requirement.description?.attachments ?? []),
       ...(requirement.feature.description?.attachments ?? []),
     ],
+    descriptions: [
+      requirement.description?.markdownBody,
+      requirement.feature.description?.markdownBody,
+    ],
     model: requirement,
   };
 }
@@ -189,7 +198,7 @@ export async function buildIssue({
   comment: string;
   model: FetchedFeature | FetchedRequirement;
 }> {
-  let { body, attachments, model } =
+  let { body, attachments, descriptions, model } =
     record.typename === "Feature"
       ? await describeFeature(record)
       : await describeRequirement(record);
@@ -202,6 +211,11 @@ export async function buildIssue({
     attachments.forEach((att) => {
       body += `- [${att.fileName}](${att.downloadUrl})\n`;
     });
+  }
+
+  const prototypes = await describePrototypes(descriptions);
+  if (prototypes) {
+    body += `\n\n${prototypes}`;
   }
 
   const comment = `
