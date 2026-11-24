@@ -1,7 +1,7 @@
 {
   "name": "aha-develop.assign-claude",
   "description": "Claude",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "author": "Aha! (support@aha.io)",
   "repository": {
     "type": "git",
