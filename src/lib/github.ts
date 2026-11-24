@@ -153,15 +153,10 @@ export async function findOpenPullRequest(
   repo: string,
   branch: string,
 ): Promise<GitPullRequest | null> {
-  const query = new URLSearchParams({
-    state: "open",
-    head: `${owner}:${branch}`,
-    per_page: "1",
-  });
   const pulls = await restRequest<GitPullRequest[]>(
     token,
     "GET",
-    `/repos/${owner}/${repo}/pulls?${query}`,
+    `/repos/${owner}/${repo}/pulls?state=open&head=${encodeURIComponent(`${owner}:${branch}`)}&per_page=1`,
   );
   return pulls[0] ?? null;
 }
@@ -344,15 +339,10 @@ export async function bootstrapBranch(
           prUrl: existingPr.html_url,
         };
       }
-      const query = new URLSearchParams({
-        state: "closed",
-        head: `${owner}:${branch}`,
-        per_page: "1",
-      });
       const pulls = await restRequest<GitPullRequest[]>(
         token,
         "GET",
-        `/repos/${owner}/${repo}/pulls?${query}`,
+        `/repos/${owner}/${repo}/pulls?state=closed&head=${encodeURIComponent(`${owner}:${branch}`)}&per_page=1`,
       );
       if (pulls.length > 0) continue;
       // A saved branch belongs to this assignment even if a failed run pushed
