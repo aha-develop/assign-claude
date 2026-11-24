@@ -227,6 +227,42 @@ describe("bootstrapBranch", () => {
       expect(calls.some(({ method }) => method === "PATCH")).toBe(false);
     },
   );
+
+  // Event handlers run in Aha!'s server-side V8 runtime, which has no
+  // URLSearchParams, so query strings must be built without it.
+  it("looks up pull requests without URLSearchParams", async () => {
+    const urlSearchParams = globalThis.URLSearchParams;
+    Reflect.deleteProperty(globalThis, "URLSearchParams");
+    try {
+      const calls = mockGitHub([
+        repositoryRoute,
+        baseRefRoute,
+        {
+          method: "GET",
+          path: "/repos/acme/app/git/ref/heads/DEV-42-work",
+          body: { object: { sha: "work-sha" } },
+        },
+        { method: "GET", path: /\/pulls\?/, body: [] },
+      ]);
+      await bootstrapBranch("token", {
+        owner: "acme",
+        repo: "app",
+        referenceNum: "DEV-42",
+        name: "Do the work",
+        previousBranch: "DEV-42-work",
+      });
+      expect(
+        calls
+          .map(({ path }) => path)
+          .filter((path) => path.includes("/pulls?")),
+      ).toEqual([
+        "/repos/acme/app/pulls?state=open&head=acme%3ADEV-42-work&per_page=1",
+        "/repos/acme/app/pulls?state=closed&head=acme%3ADEV-42-work&per_page=1",
+      ]);
+    } finally {
+      globalThis.URLSearchParams = urlSearchParams;
+    }
+  });
 });
 
 describe("dispatchClaudeWorkflow", () => {

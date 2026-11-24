@@ -75,6 +75,17 @@ function describeError(
   return base;
 }
 
+// Event handlers run in Aha!'s server-side JavaScript runtime, which has no
+// URLSearchParams.
+function queryString(params: Record<string, string>): string {
+  return Object.entries(params)
+    .map(
+      ([key, value]) =>
+        `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+    )
+    .join("&");
+}
+
 export async function getGitHubToken(mode: TriggerMode): Promise<string> {
   const scope =
     mode === "workflow" ? "repo, read:org, workflow" : "repo, read:org";
@@ -153,7 +164,7 @@ export async function findOpenPullRequest(
   repo: string,
   branch: string,
 ): Promise<GitPullRequest | null> {
-  const query = new URLSearchParams({
+  const query = queryString({
     state: "open",
     head: `${owner}:${branch}`,
     per_page: "1",
@@ -344,7 +355,7 @@ export async function bootstrapBranch(
           prUrl: existingPr.html_url,
         };
       }
-      const query = new URLSearchParams({
+      const query = queryString({
         state: "closed",
         head: `${owner}:${branch}`,
         per_page: "1",
